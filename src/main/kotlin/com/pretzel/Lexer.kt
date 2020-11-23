@@ -234,8 +234,13 @@ class Lexer(_source: String, mode: SourceMode) {
             frac = true
             result.append(next())
             while (peek().isDigit()) result.append(next())
-        } else if (peek().toLowerCase() == 'l') long = true
-        else if (peek().toLowerCase() == 's') short = true
+        } else if (peek().toLowerCase() == 'l') {
+            long = true
+            next()
+        } else if (peek().toLowerCase() == 's') {
+            short = true
+            next()
+        }
 
 
         pushToken(
@@ -257,8 +262,8 @@ class Lexer(_source: String, mode: SourceMode) {
         val text = result.toString()
 
         val type: TokenType?
-        if (text !in kwds.keys) type = TokenType.IDENTIFIER
-        else type = kwds[text]
+        type = if (text !in kwds.keys) TokenType.IDENTIFIER
+        else kwds[text]
         pushToken(type!!, result.toString())
     }
 
