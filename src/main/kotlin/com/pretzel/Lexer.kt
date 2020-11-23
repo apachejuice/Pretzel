@@ -25,7 +25,6 @@ class Lexer(_source: String, mode: SourceMode) {
         DOT,
         ELIF,
         ELSE,
-        EOF,
         EQ,
         ERROR,
         FLOAT_LITERAL,
@@ -217,7 +216,7 @@ class Lexer(_source: String, mode: SourceMode) {
 
     private fun number(startDigit: Char, possibleByte: Boolean) {
         val result = StringBuilder()
-        val isbyte = possibleByte && (peek() == 'x' || peek() == 'X')
+        val isbyte = possibleByte && peek().toLowerCase() == 'x'
         if (isbyte) {
             result.append("x")
             next()
@@ -225,18 +224,27 @@ class Lexer(_source: String, mode: SourceMode) {
             pushToken(TokenType.BYTE_LITERAL, "0$result")
             return
         }
+
         while (peek().isDigit()) result.append(next())
         var frac = false
+        var long = false
+        var short = false
 
         if (peek() == '.' && peek(1).isDigit() && !isbyte) {
             frac = true
             result.append(next())
             while (peek().isDigit()) result.append(next())
-        }
+        } else if (peek().toLowerCase() == 'l') long = true
+        else if (peek().toLowerCase() == 's') short = true
+
 
         pushToken(
                 if (frac)
                     TokenType.FLOAT_LITERAL
+                else if (long)
+                    TokenType.LONG_LITERAL
+                else if (short)
+                    TokenType.SHORT_LITERAL
                 else
                     TokenType.INTEGER_LITERAL,
             startDigit + result.toString())
@@ -271,6 +279,7 @@ class Lexer(_source: String, mode: SourceMode) {
             '*' -> pushToken(TokenType.MUL)
             ':' -> pushToken(TokenType.COLON)
             '@' -> pushToken(TokenType.AT)
+            '#' -> pushToken(TokenType.HASHTAG)
             '.' -> {
                 if (match('.')) {
                     if (match('.')) {
