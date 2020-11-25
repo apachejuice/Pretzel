@@ -14,7 +14,7 @@ class Lexer(_source: String, mode: SourceMode) {
         AT,
         BOOL,
         BREAK,
-        BYTE_LITERAL,
+        HEX_LITERAL,
         CLASS,
         COLON,
         COMMA,
@@ -223,7 +223,7 @@ class Lexer(_source: String, mode: SourceMode) {
             result.append("x")
             next()
             while (peek().isDigit() || peek() in "abcdef") result.append(next())
-            pushToken(TokenType.BYTE_LITERAL, "0$result")
+            pushToken(TokenType.HEX_LITERAL, "0$result")
             return
         }
 
