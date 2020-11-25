@@ -21,7 +21,6 @@ class Lexer(_source: String, mode: SourceMode) {
         CONCAT_COMMA,
         CONCAT_SPACE,
         DIV,
-        DOC_COMMENT,
         DOT,
         ELIF,
         ELSE,
@@ -44,7 +43,6 @@ class Lexer(_source: String, mode: SourceMode) {
         LTEQ,
         MINUS,
         MOD,
-        MODULE_SEPARATOR,
         MUL,
         NO,
         NOT,
@@ -56,8 +54,8 @@ class Lexer(_source: String, mode: SourceMode) {
         RBRACE,
         RPAREN,
         SHORT_LITERAL,
-        SQ_BRACET_L,
-        SQ_BRACET_R,
+        LSQB,
+        RSQB,
         STRING_LITERAL,
         CHARACTER_LITERAL,
         TEMPLATE_STRING,
@@ -65,6 +63,7 @@ class Lexer(_source: String, mode: SourceMode) {
         VAR,
         WHEN,
         YES,
+        XOR,
         // no token
         INVALID,
     }
@@ -117,6 +116,7 @@ class Lexer(_source: String, mode: SourceMode) {
         "when" to TokenType.WHEN,
         "yes" to TokenType.YES,
         "class" to TokenType.CLASS,
+        "mod" to TokenType.MOD,
     )
 
 
@@ -204,9 +204,11 @@ class Lexer(_source: String, mode: SourceMode) {
         } else pushToken(TokenType.DIV)
     }
 
-    private fun string() {
+    private fun string(char: Boolean) {
         val result = StringBuilder()
-        while (peek() != '"' && !isAtEnd()) result.append(next())
+        if (char) {
+            
+        } else while (peek() != '"' && !isAtEnd()) result.append(next())
 
         if (isAtEnd()) throw RuntimeException("Unterminated string.")
         next()
@@ -277,6 +279,8 @@ class Lexer(_source: String, mode: SourceMode) {
             ')' -> pushToken(TokenType.RPAREN)
             '{' -> pushToken(TokenType.LBRACE)
             '}' -> pushToken(TokenType.RBRACE)
+            '[' -> pushToken(TokenType.LSQB)
+            ']' -> pushToken(TokenType.RSQB)
             ',' -> pushToken(TokenType.COMMA)
             '-' -> pushToken(TokenType.MINUS)
             '+' -> pushToken(TokenType.PLUS)
@@ -285,6 +289,11 @@ class Lexer(_source: String, mode: SourceMode) {
             ':' -> pushToken(TokenType.COLON)
             '@' -> pushToken(TokenType.AT)
             '#' -> pushToken(TokenType.HASHTAG)
+            '$' -> pushToken(TokenType.VAR)
+            '^' -> {
+                if (match('^')) pushToken(TokenType.POW)
+                else pushToken(TokenType.XOR)
+            }
             '.' -> {
                 if (match('.')) {
                     if (match('.')) {
