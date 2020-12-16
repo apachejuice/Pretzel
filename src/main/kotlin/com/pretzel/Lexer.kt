@@ -1,5 +1,8 @@
 package com.pretzel
 
+
+import com.pretzel.ErrorType.LEXER
+import org.apache.commons.text.StringEscapeUtils
 import java.io.File
 import java.util.Stack
 
@@ -57,7 +60,6 @@ class Lexer(_source: String, mode: SourceMode) {
         LSQB,
         RSQB,
         STRING_LITERAL,
-        CHARACTER_LITERAL,
         TEMPLATE_STRING,
         USE,
         VAR,
@@ -68,11 +70,37 @@ class Lexer(_source: String, mode: SourceMode) {
         INVALID,
     }
 
-    data class Token(
-        val lexeme: String?, val type: TokenType,
-        val line: Int, val column: Int, val file: String) {
+    data class Context(val line: Int, val column: Int,
+                       val lineContent: String, val file: String) {
+        override operator fun equals(other: Any?): Boolean {
+            if (other == null || other !is Context)
+                return false
+
+            if (other.hashCode() == hashCode())
+                return true
+
+            return line == other.line && column == other.column
+                    && other.lineContent == lineContent && file == other.file
+        }
+
+        override fun hashCode(): Int {
+            var result = line
+            result = 31 * result + column
+            result = 31 * result + lineContent.hashCode()
+            result = 31 * result + file.hashCode()
+            return result
+        }
+
+        override fun toString(): String {
+            return "file '$file' $line:$column"
+        }
+    }
+
+    open class Token(
+        val lexeme: String?, val type: TokenType, val line: Int,
+        val column: Int, val file: String, val lineContent: String) {
         companion object {
-            val NULL_TOKEN: Token = Token("", TokenType.INVALID, -1, -1, "")
+            class NullToken(file: String) : Token("", TokenType.INVALID, -1, -1, file, "")
         }
 
         override operator fun equals(other: Any?): Boolean {
@@ -98,7 +126,22 @@ class Lexer(_source: String, mode: SourceMode) {
             result = 31 * result + file.hashCode()
             return result
         }
+
+        fun `is`(t: TokenType): Boolean {
+            return type == t
+        }
+
+        fun `is`(s: String): Boolean {
+            return lexeme == s
+        }
+
+        fun toContext(): Context {
+            return Context(line, column, lineContent, file)
+        }
     }
+
+    private val context: Context
+        get() = Context(line, column, source.lines()[line - 1], filename)
 
     private val kwds: Map<String, TokenType> = mapOf(
         "bool" to TokenType.BOOL,
@@ -125,17 +168,19 @@ class Lexer(_source: String, mode: SourceMode) {
     private var pos: Int = 0
     private var source: String
     private val mode: SourceMode
-    private var done: Boolean = false
     private val sourceLength: Int
         get() = source.length
 
-    val file: File?
+    private val file: File?
         get() {
             return when (mode) {
                 SourceMode.FILE -> File(source)
                 SourceMode.DIRECT -> null
             }
         }
+
+    private val filename: String
+        get() = if (file == null) "<input>" else file!!.name
 
     val tokens: Stack<Token> = Stack()
 
@@ -146,6 +191,13 @@ class Lexer(_source: String, mode: SourceMode) {
         }
 
         this.mode = mode
+    }
+
+    fun clean() {
+        line = 1
+        column = 1
+        pos = 0
+        tokens.clear()
     }
 
     private fun shiftInLine() {
@@ -187,44 +239,58 @@ class Lexer(_source: String, mode: SourceMode) {
         return true
     }
 
+    private fun match(expected: Int): Boolean = match(expected.toChar())
+
     private fun divOrComment() {
-        if (match('/'))
-            while (peek() != '\n' && !isAtEnd()) next()
-        else if (match('*')) {
-            while (peek() != '*') {
+        when {
+            match('/') -> while (peek() != '\n' && !isAtEnd()) next()
+            match('*') -> {
+                while (peek() != '*') {
+                    next()
+                    if (isAtEnd()) Report.error(LEXER, "unterminated block comment", context)
+                }
+
                 next()
-                if (isAtEnd()) throw RuntimeException("unterminated block comment")
+                if (peek() != '/' || isAtEnd())
+                    Report.error(LEXER,"unterminated block comment", context)
+
+                next(); next() // remaining * and /
             }
-
-            next()
-            if (peek() != '/')
-                throw RuntimeException("unterminated block comment")
-
-            next(); next() // remaining * and /
-        } else pushToken(TokenType.DIV)
+            else -> pushToken(TokenType.DIV)
+        }
     }
 
-    private fun string(char: Boolean) {
+    private fun string() {
         val result = StringBuilder()
-        if (char) {
-            
-        } else while (peek() != '"' && !isAtEnd()) result.append(next())
 
-        if (isAtEnd()) throw RuntimeException("Unterminated string.")
+        while (peek() != '"' && !isAtEnd()) {
+            if (peek() == '\n') line++
+            result.append(peek())
+            shiftInLine()
+        }
+
+        if (isAtEnd()) {
+            Report.error(LEXER, "unterminated string", context)
+            return
+        }
+
         next()
-
         pushToken(TokenType.STRING_LITERAL, result.toString())
     }
 
-    private fun number(startDigit: Char, possibleByte: Boolean) {
+    private fun number(startDigit: Char, possibleHex: Boolean, returnString: Boolean = false): String? {
         val result = StringBuilder()
-        val isbyte = possibleByte && peek().toLowerCase() == 'x'
-        if (isbyte) {
+        val ishex = possibleHex && peek().toLowerCase() == 'x'
+        if (ishex) {
             result.append("x")
             next()
-            while (peek().isDigit() || peek() in "abcdef") result.append(next())
-            pushToken(TokenType.HEX_LITERAL, "0$result")
-            return
+            while (peek().isDigit() || peek().toLowerCase() in "abcdef") result.append(next())
+            if (!returnString) {
+                pushToken(TokenType.HEX_LITERAL, "0$result")
+                return null
+            }
+
+            return "0$result"
         }
 
         while (peek().isDigit()) result.append(next())
@@ -232,7 +298,7 @@ class Lexer(_source: String, mode: SourceMode) {
         var long = false
         var short = false
 
-        if (peek() == '.' && peek(1).isDigit() && !isbyte) {
+        if (peek() == '.' && peek(1).isDigit() && !ishex) {
             frac = true
             result.append(next())
             while (peek().isDigit()) result.append(next())
@@ -244,17 +310,20 @@ class Lexer(_source: String, mode: SourceMode) {
             next()
         }
 
+        if (!returnString) {
+            pushToken(
+                when {
+                    frac -> TokenType.FLOAT_LITERAL
+                    long -> TokenType.LONG_LITERAL
+                    short -> TokenType.SHORT_LITERAL
+                    else -> TokenType.INTEGER_LITERAL
+                },
+                startDigit + result.toString()
+            )
+            return null
+        }
 
-        pushToken(
-                if (frac)
-                    TokenType.FLOAT_LITERAL
-                else if (long)
-                    TokenType.LONG_LITERAL
-                else if (short)
-                    TokenType.SHORT_LITERAL
-                else
-                    TokenType.INTEGER_LITERAL,
-            startDigit + result.toString())
+        return startDigit + result.toString()
     }
 
     private fun identifier(startDigit: Char) {
@@ -270,55 +339,113 @@ class Lexer(_source: String, mode: SourceMode) {
     }
 
     private fun pushToken(type: TokenType, literal: String? = null) =
-                    tokens.push(Token(literal, type, line, column, if (file == null) "<input>" else file!!.name))
+                    tokens.push(Token(literal, type, line, column - 1, filename, context.lineContent))
+
+    private fun pushToken(type: TokenType, literal: Char) = pushToken(type, "%c".format(literal))
 
     private fun getNextToken() {
         when (val c = next()) {
-            '\u0000' -> done = true
-            '(' -> pushToken(TokenType.LPAREN)
-            ')' -> pushToken(TokenType.RPAREN)
-            '{' -> pushToken(TokenType.LBRACE)
-            '}' -> pushToken(TokenType.RBRACE)
-            '[' -> pushToken(TokenType.LSQB)
-            ']' -> pushToken(TokenType.RSQB)
-            ',' -> pushToken(TokenType.COMMA)
-            '-' -> pushToken(TokenType.MINUS)
-            '+' -> pushToken(TokenType.PLUS)
-            ';' -> pushToken(TokenType.SEMI)
-            '*' -> pushToken(TokenType.MUL)
-            ':' -> pushToken(TokenType.COLON)
-            '@' -> pushToken(TokenType.AT)
-            '#' -> pushToken(TokenType.HASHTAG)
-            '$' -> pushToken(TokenType.VAR)
+            '(' -> pushToken(TokenType.LPAREN, c)
+            ')' -> pushToken(TokenType.RPAREN, c)
+            '{' -> pushToken(TokenType.LBRACE, c)
+            '}' -> pushToken(TokenType.RBRACE, c)
+            '[' -> pushToken(TokenType.LSQB, c)
+            ']' -> pushToken(TokenType.RSQB, c)
+            ',' -> pushToken(TokenType.COMMA, c)
+            '-' -> pushToken(TokenType.MINUS, c)
+            '+' -> pushToken(TokenType.PLUS, c)
+            ';' -> pushToken(TokenType.SEMI, c)
+            '*' -> pushToken(TokenType.MUL, c)
+            ':' -> pushToken(TokenType.COLON, c)
+            '@' -> pushToken(TokenType.AT, c)
+            '#' -> pushToken(TokenType.HASHTAG, c)
+            '$' -> pushToken(TokenType.VAR, c)
             '^' -> {
-                if (match('^')) pushToken(TokenType.POW)
-                else pushToken(TokenType.XOR)
+                if (match('^')) pushToken(TokenType.POW, "^^")
+                else pushToken(TokenType.XOR, '^')
             }
             '.' -> {
                 if (match('.')) {
                     if (match('.')) {
-                        pushToken(TokenType.CONCAT_COMMA)
-                    } else pushToken(TokenType.CONCAT_SPACE)
-                } else pushToken(TokenType.DOT)
+                        pushToken(TokenType.CONCAT_COMMA, "...")
+                    } else pushToken(TokenType.CONCAT_SPACE, "..")
+                } else pushToken(TokenType.DOT, '.')
             }
-            '!' -> pushToken(if (match('=')) TokenType.NOT else TokenType.NOTEQ)
-            '=' -> pushToken(if (match('=')) TokenType.ASSIGN else TokenType.EQ)
-            '<' -> pushToken(if (match('=')) TokenType.LTEQ else TokenType.LT)
-            '>' -> pushToken(if (match('=')) TokenType.GTEQ else TokenType.GT)
+            '!' -> {
+                val tok: String
+                val tt = when {
+                    match('=') -> {
+                        tok = "!="
+                        TokenType.NOTEQ
+                    }
+                    else -> {
+                        tok = "!"
+                        TokenType.NOT
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+            '=' -> {
+                val tok: String
+                val tt = when {
+                    match('=') -> {
+                        tok = "=="
+                        TokenType.ASSIGN
+                    }
+                    else -> {
+                        tok = "="
+                        TokenType.EQ
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+            '<' -> {
+                val tok: String
+                val tt = when {
+                    match('=') -> {
+                        tok = "<="
+                        TokenType.LTEQ
+                    }
+                    else -> {
+                        tok = "<"
+                        TokenType.LT
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+            '>' -> {
+                val tok: String
+                val tt = when {
+                    match('=') -> {
+                        tok = ">="
+                        TokenType.GTEQ
+                    }
+                    else -> {
+                        tok = ">"
+                        TokenType.GT
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
             '/' -> divOrComment()
             ' ', '\r' -> { /* ignore */ }
             '\t' -> { shiftInLine() }
             '\n' -> line++
-            '"' -> string()
+            '"', '\'' -> string()
             in '0'..'9' -> number(c, c == '0')
             else -> {
                 if (isAlpha(c)) identifier(c)
-                else throw RuntimeException("Unexpected character '$c'.")
+                else Report.error(LEXER, "unexpected character '$c'.", context)
             }
         }
     }
 
     fun getAllTokens() {
         while (!isAtEnd()) getNextToken()
+        tokens.push(Token.Companion.NullToken(filename))
     }
 }

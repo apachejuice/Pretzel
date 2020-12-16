@@ -8,9 +8,9 @@ class Main {
         @JvmStatic
         fun main(args: Array<String>) {
             val l = Lexer(Scanner(System.`in`).nextLine(), Lexer.SourceMode.DIRECT)
-            l.getAllTokens()
-
-            for (i in l.tokens) println(i)
+            val ts = TokenStream.open(l)
+            ts.accept(Lexer.TokenType.IN)
+            println(ts)
         }
     }
 }
