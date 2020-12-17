@@ -2,6 +2,7 @@ package com.pretzel
 
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
+import com.pretzel.core.parser.Rule
 import java.util.Scanner
 import kotlin.system.exitProcess
 

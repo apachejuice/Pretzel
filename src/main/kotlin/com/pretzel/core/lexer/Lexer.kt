@@ -175,7 +175,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
     private val sourceLength: Int
         get() = source.length
 
-    private val file: File?
+    val file: File?
         get() {
             return when (mode) {
                 SourceMode.FILE -> File(source)
@@ -183,7 +183,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
             }
         }
 
-    private val filename: String
+    val filename: String
         get() = if (file == null) "<input>" else file!!.name
 
     val tokens: Stack<Token> = Stack()

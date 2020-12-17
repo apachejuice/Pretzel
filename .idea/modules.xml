@@ -4,7 +4,6 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/Pretzel.iml" filepath="$PROJECT_DIR$/.idea/modules/Pretzel.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/Pretzel.main.iml" filepath="$PROJECT_DIR$/.idea/modules/Pretzel.main.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Pretzel.test.iml" filepath="$PROJECT_DIR$/.idea/modules/Pretzel.test.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/pretzel.iml" filepath="$PROJECT_DIR$/.idea/pretzel.iml" />
     </modules>
   </component>
