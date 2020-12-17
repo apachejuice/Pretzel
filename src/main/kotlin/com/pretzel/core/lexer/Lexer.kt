@@ -253,16 +253,18 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
                 while (true) {
                     if (next() == '*')
                         if (peek() == '/') break
-                    if (isAtEnd()) Report.error(LEXER, "unterminated block comment", context, true)
+                    if (isAtEnd()) {
+                        Report.error(LEXER, "unterminated block comment", context, repl)
+                        // make sure to not fall in an endless loop
+                        next()
+                        return
+                    }
                 }
 
+                // The remaing /
                 next()
-                if (peek() != '/' || isAtEnd())
-                    Report.error(LEXER, "unterminated block comment", context, true)
-
-                next(); next() // remaining * and /
             }
-            else -> pushToken(TokenType.DIV)
+            else -> pushToken(TokenType.DIV, '/')
         }
     }
 
@@ -447,7 +449,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
             in '0'..'9' -> number(c, c == '0')
             else -> {
                 if (isAlpha(c)) identifier(c)
-                else Report.error(LEXER, "unexpected character '$c'.", context, true)
+                else Report.error(LEXER, "unexpected character '$c'.", context, repl)
             }
         }
     }
