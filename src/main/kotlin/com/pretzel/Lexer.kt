@@ -101,7 +101,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
 
     open class Token(
         val lexeme: String?, val type: TokenType, val line: Int,
-        val column: Int, val file: String) {
+        val column: Int, val file: String, val lineContent: String) {
         companion object {
             class NullToken(file: String) : Token("", TokenType.INVALID, -1, -1, file, "")
         }
