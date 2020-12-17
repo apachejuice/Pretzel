@@ -6,7 +6,7 @@ import org.apache.commons.text.StringEscapeUtils
 import java.io.File
 import java.util.Stack
 
-class Lexer(_source: String, mode: SourceMode) {
+class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
     enum class SourceMode {
         FILE,
         DIRECT,
@@ -70,7 +70,7 @@ class Lexer(_source: String, mode: SourceMode) {
         INVALID,
     }
 
-    data class Context(val line: Int, val column: Int,
+    data class Context(val line: Int, private val _column: Int,
                        val lineContent: String, val file: String) {
         override operator fun equals(other: Any?): Boolean {
             if (other == null || other !is Context)
@@ -79,9 +79,12 @@ class Lexer(_source: String, mode: SourceMode) {
             if (other.hashCode() == hashCode())
                 return true
 
-            return line == other.line && column == other.column
+            return line == other.line && _column == other._column
                     && other.lineContent == lineContent && file == other.file
         }
+
+        val column: Int
+            get() = _column - 1
 
         override fun hashCode(): Int {
             var result = line
@@ -98,7 +101,7 @@ class Lexer(_source: String, mode: SourceMode) {
 
     open class Token(
         val lexeme: String?, val type: TokenType, val line: Int,
-        val column: Int, val file: String, val lineContent: String) {
+        val column: Int, val file: String) {
         companion object {
             class NullToken(file: String) : Token("", TokenType.INVALID, -1, -1, file, "")
         }
@@ -140,6 +143,7 @@ class Lexer(_source: String, mode: SourceMode) {
         }
     }
 
+    val repl: Boolean
     private val context: Context
         get() = Context(line, column, source.lines()[line - 1], filename)
 
@@ -190,6 +194,7 @@ class Lexer(_source: String, mode: SourceMode) {
             SourceMode.DIRECT -> _source
         }
 
+        this.repl = repl
         this.mode = mode
     }
 
@@ -245,14 +250,15 @@ class Lexer(_source: String, mode: SourceMode) {
         when {
             match('/') -> while (peek() != '\n' && !isAtEnd()) next()
             match('*') -> {
-                while (peek() != '*') {
-                    next()
-                    if (isAtEnd()) Report.error(LEXER, "unterminated block comment", context)
+                while (true) {
+                    if (next() == '*')
+                        if (peek() == '/') break
+                    if (isAtEnd()) Report.error(LEXER, "unterminated block comment", context, true)
                 }
 
                 next()
                 if (peek() != '/' || isAtEnd())
-                    Report.error(LEXER,"unterminated block comment", context)
+                    Report.error(LEXER,"unterminated block comment", context, true)
 
                 next(); next() // remaining * and /
             }
@@ -270,7 +276,9 @@ class Lexer(_source: String, mode: SourceMode) {
         }
 
         if (isAtEnd()) {
-            Report.error(LEXER, "unterminated string", context)
+            // We want an offset in string errors to point to the "missing" character
+            val c = Context(context.line, context.column + 1, context.lineContent, context.file)
+            Report.error(LEXER, "unterminated string", c, repl)
             return
         }
 
@@ -439,7 +447,7 @@ class Lexer(_source: String, mode: SourceMode) {
             in '0'..'9' -> number(c, c == '0')
             else -> {
                 if (isAlpha(c)) identifier(c)
-                else Report.error(LEXER, "unexpected character '$c'.", context)
+                else Report.error(LEXER, "unexpected character '$c'.", context, true)
             }
         }
     }

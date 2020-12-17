@@ -6,17 +6,19 @@ import kotlin.system.exitProcess
 
 class Report {
     companion object {
-        @Contract("-> halt")
-        fun error(errorType: ErrorType, message: String, context: Lexer.Context) {
+        @Contract("_, _, _, false -> halt")
+        fun error(errorType: ErrorType, message: String, context: Lexer.Context, repl: Boolean) {
             val msg = """
                 |A ${errorType.format} occurred at $context
                 |Message: $message
                 |line ${context.line}:
-                |${context.lineContent}
-                |${" ".repeat(context.column - 1) + "^"}
+                | | ${context.lineContent}
+                |   ${" ".repeat(context.column - 1 /* offset */) + "^"}
             """.trimMargin()
             println(msg)
-            exitProcess(errorType.exitCode)
+
+            if (!repl)
+                exitProcess(errorType.exitCode)
         }
     }
 }

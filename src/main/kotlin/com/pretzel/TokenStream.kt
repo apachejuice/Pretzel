@@ -5,7 +5,9 @@ import java.util.Objects
 import java.util.Spliterator
 import java.util.function.Consumer
 
-class TokenStream(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
+class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
+    private var repl: Boolean = false
+
     /**
      * Returns the lexer used by this instance of Lexer.TokenStream.
      *
@@ -14,6 +16,8 @@ class TokenStream(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
     var lexer: Lexer? = null
     private val tokens: MutableList<Lexer.Token>
     private var idx: Int
+    val length: Int
+        get() = tokens.size
 
     /**
      * Accepts a token at the current index.
@@ -30,7 +34,7 @@ class TokenStream(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
             }
         }
 
-        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toContext())
+        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toContext(), repl)
         return Lexer.Token.Companion.NullToken("")
     }
 
@@ -46,7 +50,7 @@ class TokenStream(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
         for (s in applicant) {
             if (tt !== s) {
                 Report.error(
-                    PARSER, "ttbol of type '$s', got '$tt'", token.toContext()
+                    PARSER, "ttbol of type '$s', got '$tt'", token.toContext(), repl
                 )
             }
         }
@@ -177,7 +181,7 @@ class TokenStream(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
                 java.lang.String.format(
                     "expected identifier, got '%s'",
                     token.lexeme
-                ), token.toContext()
+                ), token.toContext(), repl
             )
         }
         return token
@@ -213,6 +217,7 @@ class TokenStream(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
             lexer.getAllTokens()
             val ts = TokenStream(lexer.tokens)
             ts.lexer = lexer
+            ts.repl = lexer.repl
             return ts
         }
 
@@ -222,7 +227,7 @@ class TokenStream(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
          * @return A new Lexer.TokenStream instance
          */
         fun open(file: String): TokenStream {
-            val lx = Lexer(file, Lexer.SourceMode.FILE)
+            val lx = Lexer(file, Lexer.SourceMode.FILE, false)
             lx.getAllTokens()
             return TokenStream(lx.tokens)
         }
