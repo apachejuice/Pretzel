@@ -1,6 +1,7 @@
-package com.pretzel
+package com.pretzel.core
 
 
+import com.pretzel.core.lexer.Lexer
 import org.jetbrains.annotations.Contract
 import kotlin.system.exitProcess
 

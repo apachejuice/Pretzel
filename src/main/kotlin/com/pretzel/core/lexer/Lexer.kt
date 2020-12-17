@@ -1,8 +1,8 @@
-package com.pretzel
+package com.pretzel.core.lexer
 
 
-import com.pretzel.ErrorType.LEXER
-import org.apache.commons.text.StringEscapeUtils
+import com.pretzel.core.ErrorType.LEXER
+import com.pretzel.core.Report
 import java.io.File
 import java.util.Stack
 
@@ -258,7 +258,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
 
                 next()
                 if (peek() != '/' || isAtEnd())
-                    Report.error(LEXER,"unterminated block comment", context, true)
+                    Report.error(LEXER, "unterminated block comment", context, true)
 
                 next(); next() // remaining * and /
             }

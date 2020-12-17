@@ -1,6 +1,8 @@
-package com.pretzel
+package com.pretzel.core.lexer
 
-import com.pretzel.ErrorType.PARSER
+import com.pretzel.core.ErrorType.PARSER
+import com.pretzel.core.Report
+
 import java.util.Objects
 import java.util.Spliterator
 import java.util.function.Consumer
