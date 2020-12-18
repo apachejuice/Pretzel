@@ -17,7 +17,6 @@ repositories {
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.1")
-    implementation("org.apache.commons:commons-text:1.9")
     testImplementation("junit", "junit", "4.12")
 }
 
