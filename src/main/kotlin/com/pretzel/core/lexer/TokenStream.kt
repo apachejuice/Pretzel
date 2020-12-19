@@ -2,8 +2,8 @@ package com.pretzel.core.lexer
 
 import com.pretzel.core.ErrorType.PARSER
 import com.pretzel.core.Report
-import java.lang.IndexOutOfBoundsException
 
+import java.lang.IndexOutOfBoundsException
 import java.util.Objects
 import java.util.Spliterator
 import java.util.function.Consumer
@@ -25,6 +25,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
     var position: Int
         get() = idx
         set(value) { idx = value }
+
     /**
      * Accepts a token at the current index.
      *
@@ -56,7 +57,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         for (s in applicant) {
             if (tt !== s) {
                 Report.error(
-                    PARSER, "ttbol of type '$s', got '$tt'", token.toContext(), repl
+                    PARSER, "expected symbol of type '$s', got '$tt'", token.toContext(), repl
                 )
             }
         }
@@ -163,6 +164,8 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
      * @return The current token in the stream.
      */
     fun seek(): Lexer.Token {
+        if (idx > tokens.size) throw IndexOutOfBoundsException("idx > tokens.size")
+        else if (idx >= tokens.size) return tokens[idx - 1]
         return tokens[idx]
     }
 

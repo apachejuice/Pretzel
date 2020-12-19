@@ -7,14 +7,16 @@ import kotlin.system.exitProcess
 
 class Report {
     companion object {
+        var debug: Boolean = false
+
         @Contract("_, _, _, false -> halt")
         fun error(errorType: ErrorType, message: String, context: Lexer.Context, repl: Boolean) {
             val msg = """
                 |A ${errorType.format} occurred at $context
                 |Message: $message
-                |line ${context.line}:
+                |line ${context.line} ${if (debug) "in class " + Throwable().stackTrace[3] else ""}:
                 | | ${context.lineContent}
-                |   ${" ".repeat(context.column - 1 /* offset */) + "^"}
+                |   ${" ".repeat(context.column) + "^"}
             """.trimMargin()
             println(msg)
 
