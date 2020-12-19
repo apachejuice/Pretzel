@@ -2,7 +2,6 @@ package com.pretzel
 
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
-import com.pretzel.core.parser.Rule
 import java.util.Scanner
 import kotlin.system.exitProcess
 
@@ -11,6 +10,12 @@ class Main {
     companion object {
         @JvmStatic
         fun main(vararg args: String) {
+            val rep = Rule.Repeat(listOf(Lexer.TokenType.USE, Lexer.TokenType.BOOL))
+            val r = Rule()
+            r.addMatch(rep)
+            println(r.match(Lexer.TokenType.USE, Lexer.TokenType.BOOL, Lexer.TokenType.USE))
+
+
             var l: Lexer
             var ts: TokenStream
             var input: String

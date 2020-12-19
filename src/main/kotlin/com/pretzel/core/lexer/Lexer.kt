@@ -170,10 +170,11 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
     private var line: Int = 1
     private var column: Int = 1
     private var pos: Int = 0
-    private var source: String
     private val mode: SourceMode
     private val sourceLength: Int
         get() = source.length
+
+    val source: String
 
     val file: File?
         get() {
