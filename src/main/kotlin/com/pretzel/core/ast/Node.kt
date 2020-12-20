@@ -11,4 +11,12 @@ open class Node(val start: Lexer.Context, val end: Lexer.Context) : Iterable<Nod
     fun traceTo(node: Node) = trace.add(node)
 
     override fun iterator(): Iterator<Node> = children.iterator()
+
+    companion object {
+        fun getRootInstance(children: List<Node>): Node {
+            val start = children[0].start
+            val end = children[children.indices.last].end
+            return Node(start, end).also { node -> children.forEach { node.addChild(it) } }
+        }
+    }
 }

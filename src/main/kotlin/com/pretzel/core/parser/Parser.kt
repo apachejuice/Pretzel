@@ -40,7 +40,7 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
     }
 
     private fun getContext(i: Int): Context {
-        return contextStack[i];
+        return contextStack[i]
     }
 
     private fun finishContexts(): Stack<Context> {
@@ -81,7 +81,7 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
 
     // PARSING METHODS
     // The base parsing method; the root of the tree.
-    fun parse() {
+    fun parse(): Node {
         when (stream.seek().type) {
             TokenType.USE -> {
                 parseUseStmt()
@@ -89,6 +89,8 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
             }
             else -> error("not implemented yet")
         }
+
+        return Node.getRootInstance(nodes)
     }
 
     private fun checkAndPushNode() {
