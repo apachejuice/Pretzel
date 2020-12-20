@@ -20,7 +20,7 @@ class Main {
             var input: String
             val scanner = Scanner(System.`in`)
             println("Welcome to the Pretzel REPL v0.1. Type \"// exit\" to exit.")
-            Report.debug = true
+            Report.debug = "--debug" in args
 
             while (true) {
                 print(">>> ")
@@ -29,9 +29,12 @@ class Main {
                     exitProcess(0)
                 l = Lexer(input, Lexer.SourceMode.DIRECT, true)
                 ts = TokenStream.open(l)
-                if (ts.length != 0) println(ts)
-                p = Parser.fromLexer(l, true)
-                p.parse()
+                if (ts.length != 0) {
+                    if (!l.hadError) {
+                        p = Parser.fromLexer(l, true)
+                        p.parse()
+                    }
+                }
             }
         }
     }

@@ -10,18 +10,25 @@ class Report {
         var debug: Boolean = false
 
         @Contract("_, _, _, false -> halt")
-        fun error(errorType: ErrorType, message: String, context: Lexer.Context, repl: Boolean) {
+        fun error(errorType: ErrorType, message: String, faultyToken: Lexer.Token, repl: Boolean, pointerOffset: Int = 0) {
             val msg = """
-                |A ${errorType.format} occurred at $context
+                |A ${errorType.format} occurred at ${faultyToken.toContext()}
                 |Message: $message
-                |line ${context.line} ${if (debug) "in class " + Throwable().stackTrace[3] else ""}:
-                | | ${context.lineContent}
-                |   ${" ".repeat(context.column) + "^"}
+                |line ${faultyToken.line}:
+                | | ${faultyToken.lineContent}
+                |   ${" ".repeat(faultyToken.column + pointerOffset) + "^"}
+                |${if (debug) "Stack trace:\n" else ""}
             """.trimMargin()
-            println(msg)
+            print(msg)
+            if (debug) prettyPrintStackTrace(Throwable().stackTrace)
 
             if (!repl)
                 exitProcess(errorType.exitCode)
+        }
+
+        private fun prettyPrintStackTrace(trace: Array<StackTraceElement>, prefix: String = "    ") {
+            for (i in trace)
+                println("$prefix$i")
         }
     }
 }

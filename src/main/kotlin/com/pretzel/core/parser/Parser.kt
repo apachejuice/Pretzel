@@ -2,6 +2,8 @@ package com.pretzel.core.parser
 
 import com.pretzel.core.ErrorType.PARSER
 import com.pretzel.core.Report
+import com.pretzel.core.ast.Node
+import com.pretzel.core.ast.UseStmt
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.Lexer.Token
 import com.pretzel.core.lexer.Lexer.SourceMode
@@ -17,7 +19,10 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
     private var line: Int = 1
     private var column: Int = 1
     private var pos: Int = 0
+    private var hadError: Boolean = false
     private val contextStack: Stack<Context> = Stack()
+    private val nodeCache: Stack<Node> = Stack()
+    private val nodes = ArrayList<Node>()
     val lexer: Lexer
     val sourceName: String = stream.lexer.filename
 
@@ -34,6 +39,10 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
         contextStack.push(context)
     }
 
+    private fun getContext(i: Int): Context {
+        return contextStack[i];
+    }
+
     private fun finishContexts(): Stack<Context> {
         val result = contextStack
         contextStack.clear()
@@ -42,10 +51,6 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
 
     init {
         this.lexer = stream.lexer
-    }
-
-    private fun reportError(message: String) {
-        Report.error(PARSER, message, context, repl)
     }
 
     private fun <T> consumeToken(action: (t: Token, c: Context) -> T): T {
@@ -62,37 +67,71 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
     }
     
     private fun acceptToken(tt: TokenType): Token {
-        if (!stream.hasNext()) error("unexpected EOF")
-        else return stream.accept(tt)
-        return stream.seek() // will never be called
+        return if (stream.acceptIfNext(tt)) {
+            stream.seek()
+        } else {
+            error("expected symbol of type '$tt', got '${ if (stream.hasNext()) stream.seek().type else "EOF"}'",
+                if (stream.hasNext()) -1 else 0)
+            if (stream.hasNext()) stream.next() else stream.seek()
+        }
     }
 
-    private fun error(message: String) =
-        Report.error(PARSER, message, stream.seek().toContext(), repl)
+    private fun error(message: String, pointerOffset: Int = 0) =
+        Report.error(PARSER, message, stream.seek(), repl, pointerOffset = pointerOffset).also { hadError = true }
 
     // PARSING METHODS
     // The base parsing method; the root of the tree.
     fun parse() {
         when (stream.seek().type) {
-            TokenType.USE -> parseUseStmt()
+            TokenType.USE -> {
+                parseUseStmt()
+                checkAndPushNode()
+            }
             else -> error("not implemented yet")
         }
+    }
+
+    private fun checkAndPushNode() {
+        if (nodeCache.isEmpty())
+            return
+
+        nodes.addAll(nodeCache)
+        nodeCache.clear()
     }
     
     private fun parseUseStmt() {
         val result = StringJoiner(":")
+        var wildcard = false
         acceptToken(TokenType.USE)
+        initContexts(pushFirst = true)
         result.add(acceptToken(TokenType.IDENTIFIER).lexeme)
+        if (hadError) return
 
-        if (stream.isNext(TokenType.COLON)) {
-            stream.advance()
+        if (stream.acceptIfNext(TokenType.COLON)) {
             while (true) {
+                if (stream.isNext(TokenType.MUL)) {
+                    wildcard = true
+                    break
+                }
+
                 result.add(acceptToken(TokenType.IDENTIFIER).lexeme)
                 if (!stream.isNext(TokenType.COLON)) break
+                else stream.accept(TokenType.COLON)
             }
-        }
+        } else if (stream.isNext(TokenType.MUL)) wildcard = true
+        pushContext()
 
-        println(result.toString())
+        // Make sure we dont operate on a broken stack
+        if (!hadError)
+            nodeCache.push(UseStmt(
+                result.toString().split(":"),
+                getContext(0),
+                getContext(1),
+                wildcard
+            ).also {
+                finishContexts()
+                hadError = false
+            })
     }
     
     companion object {

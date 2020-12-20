@@ -41,7 +41,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             }
         }
 
-        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toContext(), repl)
+        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token, repl)
         return Lexer.Token.Companion.NullToken("")
     }
 
@@ -57,7 +57,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         for (s in applicant) {
             if (tt !== s) {
                 Report.error(
-                    PARSER, "expected symbol of type '$s', got '$tt'", token.toContext(), repl
+                    PARSER, "expected symbol of type '$s', got '$tt'", token, repl
                 )
             }
         }
@@ -95,6 +95,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
      * @return If the Lexer.TokenType type was the next one
      */
     fun acceptIfNext(vararg applicant: Lexer.TokenType): Boolean {
+        if (!hasNext()) return false
         val ttbol = tokens[idx].type
         for (tt in applicant) {
             if (ttbol === tt) {
@@ -141,7 +142,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         if (!hasNext()) return false
         val tt: Lexer.TokenType = tokens[idx].type
         for (s in applicant) {
-            if (tt === s) {
+            if (tt == s) {
                 return true
             }
         }
@@ -191,7 +192,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
                 java.lang.String.format(
                     "expected identifier, got '%s'",
                     token.lexeme
-                ), token.toContext(), repl
+                ), token, repl
             )
         }
         return token

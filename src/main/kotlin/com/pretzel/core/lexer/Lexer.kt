@@ -144,8 +144,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
     }
 
     val repl: Boolean
-    private val context: Context
-        get() = Context(line, column, source.lines()[line - 1], filename)
+    var hadError: Boolean = false
 
     private val kwds: Map<String, TokenType> = mapOf(
         "bool" to TokenType.BOOL,
@@ -255,7 +254,9 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
                     if (next() == '*')
                         if (peek() == '/') break
                     if (isAtEnd()) {
-                        Report.error(LEXER, "unterminated block comment", context, repl)
+                        val t = Token("*", TokenType.INVALID, line, column, filename, source.lines()[line - 1])
+                        Report.error(LEXER, "unterminated block comment", t, repl)
+                        hadError = true
                         // make sure to not fall in an endless loop
                         next()
                         return
@@ -279,9 +280,9 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
         }
 
         if (isAtEnd()) {
-            // We want an offset in string errors to point to the "missing" character
-            val c = Context(context.line, context.column + 1, context.lineContent, context.file)
-            Report.error(LEXER, "unterminated string", c, repl)
+            val t = Token("\"", TokenType.INVALID, line, column, filename, source.lines()[line - 1])
+            Report.error(LEXER, "unterminated string", t, repl)
+            hadError = true
             return
         }
 
@@ -350,7 +351,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
     }
 
     private fun pushToken(type: TokenType, literal: String? = null) =
-                    tokens.push(Token(literal, type, line, column - 1, filename, context.lineContent))
+                    tokens.push(Token(literal, type, line, column - 1, filename, source.lines()[line - 1]))
 
     private fun pushToken(type: TokenType, literal: Char) = pushToken(type, "%c".format(literal))
 
@@ -450,7 +451,11 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
             in '0'..'9' -> number(c, c == '0')
             else -> {
                 if (isAlpha(c)) identifier(c)
-                else Report.error(LEXER, "unexpected character '$c'.", context, repl)
+                else {
+                    val t = Token("$c", TokenType.INVALID, line, column, filename, source.lines()[line - 1])
+                    Report.error(LEXER, "unexpected character '$c'.", t, repl)
+                    hadError = true
+                }
             }
         }
     }
