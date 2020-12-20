@@ -8,9 +8,9 @@ import kotlin.system.exitProcess
 class Report {
     companion object {
         var debug: Boolean = false
-
         @Contract("_, _, _, false -> halt")
         fun error(errorType: ErrorType, message: String, faultyToken: Lexer.Token, repl: Boolean, pointerOffset: Int = 0) {
+
             val msg = """
                 |A ${errorType.format} occurred at ${faultyToken.toContext()}
                 |Message: $message

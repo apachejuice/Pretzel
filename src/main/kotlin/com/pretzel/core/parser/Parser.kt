@@ -5,10 +5,10 @@ import com.pretzel.core.Report
 import com.pretzel.core.ast.Node
 import com.pretzel.core.ast.UseStmt
 import com.pretzel.core.lexer.Lexer
-import com.pretzel.core.lexer.Lexer.Token
-import com.pretzel.core.lexer.Lexer.SourceMode
-import com.pretzel.core.lexer.Lexer.TokenType
 import com.pretzel.core.lexer.Lexer.Context
+import com.pretzel.core.lexer.Lexer.SourceMode
+import com.pretzel.core.lexer.Lexer.Token
+import com.pretzel.core.lexer.Lexer.TokenType
 import com.pretzel.core.lexer.TokenStream
 
 import java.util.Stack
@@ -57,7 +57,11 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
         return action.invoke(stream.next(), context)
     }
 
-    private fun <T> acceptToken(tt: TokenType, strict: Boolean = false, action: (strict: Boolean, t: Token, c: Context) -> T): T {
+    private fun <T> acceptToken(
+        tt: TokenType,
+        strict: Boolean = false,
+        action: (strict: Boolean, t: Token, c: Context) -> T
+    ): T {
         val tok = if (strict) stream.accept(tt) else {
             stream.acceptIfNext(tt)
             stream.seek()
@@ -65,21 +69,40 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
 
         return action.invoke(strict, tok, context)
     }
-    
+
     private fun acceptToken(tt: TokenType): Token {
         return if (stream.acceptIfNext(tt)) {
             stream.seek()
         } else {
-            error("expected symbol of type '$tt', got '${ if (stream.hasNext()) stream.seek().type else "EOF"}'",
-                if (stream.hasNext()) -1 else 0)
+            error(
+                "expected symbol of type '$tt', got '${if (stream.hasNext()) stream.seek().type else "EOF"}'",
+                if (stream.hasNext()) -1 else 0
+            )
             if (stream.hasNext()) stream.next() else stream.seek()
         }
+    }
+
+    private fun checkAndPushNode() {
+        if (nodeCache.isEmpty())
+            return
+
+        nodes.addAll(nodeCache)
+        nodeCache.clear()
+    }
+
+    private fun pushNodeUnlessError(node: Node) {
+        // Make sure we dont operate on a broken stack
+        if (!hadError)
+            nodeCache.push(node).also {
+                finishContexts()
+                hadError = false
+            }
     }
 
     private fun error(message: String, pointerOffset: Int = 0) =
         Report.error(PARSER, message, stream.seek(), repl, pointerOffset = pointerOffset).also { hadError = true }
 
-    // PARSING METHODS
+    // region PARSING METHODS
     // The base parsing method; the root of the tree.
     fun parse(): Node {
         when (stream.seek().type) {
@@ -93,14 +116,8 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
         return Node.getRootInstance(nodes)
     }
 
-    private fun checkAndPushNode() {
-        if (nodeCache.isEmpty())
-            return
+    //region STATEMENT PARSING
 
-        nodes.addAll(nodeCache)
-        nodeCache.clear()
-    }
-    
     private fun parseUseStmt() {
         val result = StringJoiner(":")
         var wildcard = false
@@ -121,21 +138,26 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
                 else stream.accept(TokenType.COLON)
             }
         } else if (stream.isNext(TokenType.MUL)) wildcard = true
-        pushContext()
 
-        // Make sure we dont operate on a broken stack
-        if (!hadError)
-            nodeCache.push(UseStmt(
+        pushContext()
+        pushNodeUnlessError(
+            UseStmt(
                 result.toString().split(":"),
                 getContext(0),
                 getContext(1),
                 wildcard
-            ).also {
-                finishContexts()
-                hadError = false
-            })
+            )
+        )
     }
-    
+
+    //endregion
+    //region EXPRESSION PARSING
+
+
+
+    //endregion
+    //endregion
+
     companion object {
         // Utility methods to get an instance
         fun fromFile(filename: String, repl: Boolean = false): Parser {
