@@ -61,6 +61,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
         RSQB,
         STRING_LITERAL,
         TEMPLATE_STRING,
+        TILDE,
         USE,
         VAR,
         WHEN,
@@ -70,7 +71,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
         INVALID,
     }
 
-    data class Context(val line: Int, private val _column: Int,
+    data class Context(val line: Int, val column: Int,
                        val lineContent: String, val file: String) {
         override operator fun equals(other: Any?): Boolean {
             if (other == null || other !is Context)
@@ -79,12 +80,9 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
             if (other.hashCode() == hashCode())
                 return true
 
-            return line == other.line && _column == other._column
+            return line == other.line && column == other.column
                     && other.lineContent == lineContent && file == other.file
         }
-
-        val column: Int
-            get() = _column - 1
 
         override fun hashCode(): Int {
             var result = line
@@ -372,6 +370,7 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
             '@' -> pushToken(TokenType.AT, c)
             '#' -> pushToken(TokenType.HASHTAG, c)
             '$' -> pushToken(TokenType.VAR, c)
+            '~' -> pushToken(TokenType.TILDE, c)
             '^' -> {
                 if (match('^')) pushToken(TokenType.POW, "^^")
                 else pushToken(TokenType.XOR, '^')
@@ -403,11 +402,11 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
                 val tt = when {
                     match('=') -> {
                         tok = "=="
-                        TokenType.ASSIGN
+                        TokenType.EQ
                     }
                     else -> {
                         tok = "="
-                        TokenType.EQ
+                        TokenType.ASSIGN
                     }
                 }
 
