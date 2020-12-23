@@ -260,8 +260,10 @@ class Parser private constructor(val stream: TokenStream) {
             }
 
             private fun parseFactor(): Expression {
-                if (stream.acceptIfNext(TokenType.PLUS)) return parseFactor() // unary plus
+                if (stream.acceptIfNext(TokenType.PLUS))  return UnaryExpression(parseFactor(), UnaryOperator.PLUS) // unary plus
                 if (stream.acceptIfNext(TokenType.MINUS)) return UnaryExpression(parseFactor(), UnaryOperator.MINUS) // unary minus
+                if (stream.acceptIfNext(TokenType.TILDE)) return UnaryExpression(parseFactor(), UnaryOperator.NEG) // negate
+                if (stream.acceptIfNext(TokenType.NOT))   return UnaryExpression(parseFactor(), UnaryOperator.NOT) // not
                 var e: Expression
 
                 if (stream.acceptIfNext(TokenType.LPAREN)) { // parentheses
@@ -281,7 +283,9 @@ class Parser private constructor(val stream: TokenStream) {
                         TokenType.FLOAT_LITERAL,
                         TokenType.SHORT_LITERAL,
                         TokenType.HEX_LITERAL,
-                        TokenType.LONG_LITERAL
+                        TokenType.LONG_LITERAL,
+                        TokenType.YES,
+                        TokenType.NO,
                     )
                 ) {
                     e = Literal(stream.seek())
