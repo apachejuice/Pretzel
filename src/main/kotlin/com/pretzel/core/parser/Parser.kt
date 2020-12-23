@@ -2,7 +2,13 @@ package com.pretzel.core.parser
 
 import com.pretzel.core.ErrorType.PARSER
 import com.pretzel.core.Report
+import com.pretzel.core.ast.BinaryExpression
+import com.pretzel.core.ast.Expression
+import com.pretzel.core.ast.FunctionCall
+import com.pretzel.core.ast.Literal
 import com.pretzel.core.ast.Node
+import com.pretzel.core.ast.Precedence
+import com.pretzel.core.ast.UnaryExpression
 import com.pretzel.core.ast.UseStmt
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.Lexer.Context
@@ -13,18 +19,25 @@ import com.pretzel.core.lexer.TokenStream
 
 import java.util.Stack
 import java.util.StringJoiner
+import kotlin.system.exitProcess
 
 
-class Parser private constructor(val stream: TokenStream, private val repl: Boolean = false) {
-    private var line: Int = 1
-    private var column: Int = 1
-    private var pos: Int = 0
+class Parser private constructor(val stream: TokenStream) {
     private var hadError: Boolean = false
     private val contextStack: Stack<Context> = Stack()
     private val nodeCache: Stack<Node> = Stack()
     private val nodes = ArrayList<Node>()
+
+    var cancellationHook: (token: Token) -> Unit = { exitProcess(1) }
     val lexer: Lexer
     val sourceName: String = stream.lexer.filename
+
+    @Synchronized
+    private fun cancel(token: Token) {
+        Thread.currentThread().interrupt()
+        cancellationHook.invoke(token)
+        throw IllegalStateException("parse shoud've been cancelled")
+    }
 
     private val context: Context
         get() = stream.seek().toContext()
@@ -53,15 +66,17 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
         this.lexer = stream.lexer
     }
 
-    private fun <T> consumeToken(action: (t: Token, c: Context) -> T): T {
-        return action.invoke(stream.next(), context)
+    private fun consumeToken(action: (t: Token, c: Context) -> Unit) {
+        if (!stream.hasNext()) {
+            error("expected token, got 'EOF'")
+        } else action.invoke(stream.next(), context)
     }
 
-    private fun <T> acceptToken(
+    private fun acceptToken(
         tt: TokenType,
         strict: Boolean = false,
-        action: (strict: Boolean, t: Token, c: Context) -> T
-    ): T {
+        action: (strict: Boolean, t: Token, c: Context) -> Unit
+    ) {
         val tok = if (strict) stream.accept(tt) else {
             stream.acceptIfNext(tt)
             stream.seek()
@@ -71,12 +86,12 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
     }
 
     private fun acceptToken(tt: TokenType): Token {
-        return if (stream.acceptIfNext(tt)) {
-            stream.seek()
+        return if (stream.isNext(tt)) {
+            stream.seek().also { stream.advance() }
         } else {
             error(
                 "expected symbol of type '$tt', got '${if (stream.hasNext()) stream.seek().type else "EOF"}'",
-                if (stream.hasNext()) -1 else 0
+                !stream.hasNext()
             )
             if (stream.hasNext()) stream.next() else stream.seek()
         }
@@ -99,21 +114,31 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
             }
     }
 
-    private fun error(message: String, pointerOffset: Int = 0) =
-        Report.error(PARSER, message, stream.seek(), repl, pointerOffset = pointerOffset).also { hadError = true }
+    private fun error(message: String, missing: Boolean = false) =
+        Report.error(PARSER, message, stream.seek(), missing).also {
+            hadError = true
+            cancel(stream.seek())
+        }
 
     // region PARSING METHODS
     // The base parsing method; the root of the tree.
-    fun parse(): Node {
-        when (stream.seek().type) {
-            TokenType.USE -> {
-                parseUseStmt()
-                checkAndPushNode()
+    fun parse(): Node? {
+        while (stream.hasNext()) {
+            when (stream.seek().type) {
+                TokenType.USE -> {
+                    parseUseStmt()
+                    checkAndPushNode()
+                }
+                else -> parseExpression(stream)//error("not implemented yet")
             }
-            else -> error("not implemented yet")
         }
 
-        return Node.getRootInstance(nodes)
+        nodes.forEach { println(it) }
+
+        return if (nodes.isEmpty())
+            null
+        else
+            Node.getRootInstance(nodes)
     }
 
     //region STATEMENT PARSING
@@ -148,32 +173,161 @@ class Parser private constructor(val stream: TokenStream, private val repl: Bool
                 wildcard
             )
         )
+
+        stream.advance()
     }
 
-    //endregion
-    //region EXPRESSION PARSING
+    enum class BinaryOperator(val operator: String) {
+        AND("&&"),
+        BAND("&"),
+        BOR("|"),
+        SIGNEDL("<<"),
+        SIGNEDR(">>"),
+        UNSIGNEDR(">>>"),
+        XOR("^"),
+        DIV("/"),
+        EQ("=="),
+        GT(">"),
+        GTEQ(">="),
+        MINUS("-"),
+        MOD("%"),
+        MUL("*"),
+        NOTEQ("!="),
+        OR("||"),
+        PLUS("+"),
+        POW("^^"),
+        LT("<"),
+        LTEQ("<="),
+        STRCOMMA("..."),
+        STRSPACE("..");
+    }
 
+    enum class UnaryOperator(val operator: String) {
+        NEG("~"),
+        NOT("!"),
+        PLUS("+"),
+        MINUS("-");
+    }
 
+    private fun parseExpression(stream: TokenStream) {
+        val node = object : Any() {
+            fun parse(): Expression {
+                return parseExpression()
+            }
+
+            // Grammar:
+            // expression = term | expression `+` term | expression `-` term
+            // term = factor | term `*` factor | term `/` factor
+            // factor = `+` factor | `-` factor | `(` expression `)`
+            //        | number | functionName factor | factor `^` factor
+            private fun parseExpression(): Expression {
+                var e = parseTerm()
+                var op: BinaryOperator
+
+                while (true) {
+                    if (stream.acceptIfNext(TokenType.PLUS, TokenType.MINUS)) {
+                        op = if (stream.seek().type == TokenType.PLUS) BinaryOperator.PLUS else BinaryOperator.MINUS
+                        e = BinaryExpression(
+                            e,
+                            parseTerm(),
+                            op,
+                            Precedence.PRETTY_HIGH
+                        )
+                    }
+
+                    else return e
+                }
+            }
+
+            private fun parseTerm(): Expression {
+                var e = parseFactor()
+                var op: BinaryOperator
+
+                while (true) {
+                    if (stream.isNext(TokenType.MUL, TokenType.DIV)) {
+                        op = if (stream.seek().type == TokenType.MUL) BinaryOperator.MUL else BinaryOperator.DIV
+                        stream.advance()
+                        e = BinaryExpression(
+                            e,
+                            parseFactor(),
+                            op,
+                            Precedence.PRETTY_HIGH
+                        )
+                    }
+
+                    else return e
+                }
+            }
+
+            private fun parseFactor(): Expression {
+                if (stream.acceptIfNext(TokenType.PLUS)) return parseFactor() // unary plus
+                if (stream.acceptIfNext(TokenType.MINUS)) return UnaryExpression(parseFactor(), UnaryOperator.MINUS) // unary minus
+                var e: Expression
+
+                if (stream.acceptIfNext(TokenType.LPAREN)) { // parentheses
+                    e = parseExpression()
+                    stream.accept(TokenType.RPAREN)
+                } else e = parseValue()
+
+                if (stream.acceptIfNext(TokenType.POW)) e = BinaryExpression(e, parseFactor(), BinaryOperator.POW, Precedence.VERY_HIGH)
+                return e
+            }
+
+            private fun parseValue(): Expression {
+                val e: Expression
+
+                if (stream.isNext(
+                        TokenType.INTEGER_LITERAL,
+                        TokenType.FLOAT_LITERAL,
+                        TokenType.SHORT_LITERAL,
+                        TokenType.HEX_LITERAL,
+                        TokenType.LONG_LITERAL
+                    )
+                ) {
+                    e = Literal(stream.seek())
+                    stream.advance()
+                } else if (stream.isNext(TokenType.IDENTIFIER)) {
+                    val t = stream.seek()
+                    stream.advance()
+                    e = if (stream.isNext(TokenType.LPAREN)) {
+                        stream.advance()
+                        stream.accept(TokenType.RPAREN)
+                        FunctionCall(t.lexeme.toString(), t.toContext(), context)
+                    } else Literal(t)
+                    stream.advance()
+                } else {
+                    error("unexpected token '${stream.seek().type}'")
+                    return null!! // the thread has been killed
+                }
+
+                return e
+            }
+
+        }.parse()
+
+        pushNodeUnlessError(node)
+        checkAndPushNode()
+    }
 
     //endregion
     //endregion
 
     companion object {
         // Utility methods to get an instance
-        fun fromFile(filename: String, repl: Boolean = false): Parser {
-            return Parser(TokenStream.open(filename), repl)
+        fun fromFile(filename: String): Parser {
+            return Parser(TokenStream.open(filename))
         }
 
-        fun fromString(source: String, repl: Boolean = false): Parser {
-            return Parser(TokenStream.open(Lexer(source, if (repl) SourceMode.DIRECT else SourceMode.FILE, repl)), repl)
+        fun fromString(source: String, mode: SourceMode): Parser {
+            return Parser(TokenStream.open(Lexer(source, mode)))
         }
 
-        fun fromLexer(lexer: Lexer, repl: Boolean = false): Parser {
-            return Parser(TokenStream.open(lexer), repl)
+        fun fromLexer(lexer: Lexer): Parser {
+            return Parser(TokenStream.open(lexer))
         }
 
-        fun fromStream(stream: TokenStream, repl: Boolean = false): Parser {
-            return Parser(stream, repl)
+        fun fromStream(stream: TokenStream): Parser {
+            return Parser(stream)
         }
     }
 }

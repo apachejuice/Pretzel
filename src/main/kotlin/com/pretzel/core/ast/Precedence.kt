@@ -17,7 +17,7 @@ enum class Precedence(val level: Int) {
     SUPER_HIGH(13),
 
     /**
-     * Object creation.
+     * Object creation, POW
      */
     VERY_HIGH(12),
 
@@ -78,7 +78,7 @@ enum class Precedence(val level: Int) {
 
     /**
      * Assignment:
-     *(  +=   -=
+     * +=   -=
      * *=   /=   %=
      * &=   ^=   |=
      * <<=  >>= >>>=

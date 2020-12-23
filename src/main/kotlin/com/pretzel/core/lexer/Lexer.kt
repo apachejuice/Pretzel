@@ -5,8 +5,9 @@ import com.pretzel.core.ErrorType.LEXER
 import com.pretzel.core.Report
 import java.io.File
 import java.util.Stack
+import kotlin.system.exitProcess
 
-class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
+class Lexer(_source: String, mode: SourceMode) {
     enum class SourceMode {
         FILE,
         DIRECT,
@@ -141,8 +142,14 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
         }
     }
 
-    val repl: Boolean
+    private fun cancel(c: Char) {
+        Thread.currentThread().interrupt()
+        cancellationHook.invoke(c)
+        throw IllegalStateException("lexing shoud've been cancelled")
+    }
+
     var hadError: Boolean = false
+    var cancellationHook: (c: Char) -> Unit = { exitProcess(1) }
 
     private val kwds: Map<String, TokenType> = mapOf(
         "bool" to TokenType.BOOL,
@@ -192,7 +199,6 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
             SourceMode.DIRECT -> _source
         }
 
-        this.repl = repl
         this.mode = mode
     }
 
@@ -253,7 +259,8 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
                         if (peek() == '/') break
                     if (isAtEnd()) {
                         val t = Token("*", TokenType.INVALID, line, column, filename, source.lines()[line - 1])
-                        Report.error(LEXER, "unterminated block comment", t, repl)
+                        Report.error(LEXER, "unterminated block comment", t)
+                        cancel('*')
                         hadError = true
                         // make sure to not fall in an endless loop
                         next()
@@ -279,7 +286,8 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
 
         if (isAtEnd()) {
             val t = Token("\"", TokenType.INVALID, line, column, filename, source.lines()[line - 1])
-            Report.error(LEXER, "unterminated string", t, repl)
+            Report.error(LEXER, "unterminated string", t)
+            cancel('"')
             hadError = true
             return
         }
@@ -451,8 +459,9 @@ class Lexer(_source: String, mode: SourceMode, repl: Boolean = false) {
             else -> {
                 if (isAlpha(c)) identifier(c)
                 else {
-                    val t = Token("$c", TokenType.INVALID, line, column, filename, source.lines()[line - 1])
-                    Report.error(LEXER, "unexpected character '$c'.", t, repl)
+                    val t = Token("$c", TokenType.INVALID, line, column - 1, filename, source.lines()[line - 1])
+                    Report.error(LEXER, "unexpected character '$c'.", t)
+                    cancel(c)
                     hadError = true
                 }
             }

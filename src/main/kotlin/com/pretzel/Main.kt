@@ -4,9 +4,7 @@ import com.pretzel.core.Report
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
 import com.pretzel.core.parser.Parser
-
 import java.util.Scanner
-
 import kotlin.system.exitProcess
 
 
@@ -27,11 +25,11 @@ class Main {
                 input = scanner.nextLine()
                 if (input.trim().startsWith("//") && "exit" in input)
                     exitProcess(0)
-                l = Lexer(input, Lexer.SourceMode.DIRECT, true)
+                l = Lexer(input, Lexer.SourceMode.DIRECT)
                 ts = TokenStream.open(l)
                 if (ts.length != 0) {
                     if (!l.hadError) {
-                        p = Parser.fromLexer(l, true)
+                        p = Parser.fromLexer(l)
                         p.parse()
                     }
                 }

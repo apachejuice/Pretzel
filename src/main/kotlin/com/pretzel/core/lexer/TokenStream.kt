@@ -4,6 +4,7 @@ import com.pretzel.core.ErrorType.PARSER
 import com.pretzel.core.Report
 
 import java.lang.IndexOutOfBoundsException
+import java.lang.RuntimeException
 import java.util.Objects
 import java.util.Spliterator
 import java.util.function.Consumer
@@ -166,7 +167,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
      */
     fun seek(): Lexer.Token {
         if (idx > tokens.size) throw IndexOutOfBoundsException("idx > tokens.size")
-        else if (idx >= tokens.size) return tokens[idx - 1]
+        else if (idx >= tokens.size) return tokens[tokens.indices.last]
         return tokens[idx]
     }
 
@@ -216,6 +217,12 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         return tokens.spliterator()
     }
 
+    fun backup(i: Int = -1) {
+        if (i >= 0) throw RuntimeException("cannot push positive numbers, use TokenStream.advance()")
+        idx += i
+        tokens.removeAt(tokens.indices.last)
+    }
+
     companion object {
         /**
          * Opens a Lexer.TokenStream with the specified Lexer instance.
@@ -228,7 +235,6 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             lexer.getAllTokens()
             val ts = TokenStream(lexer.tokens)
             ts.lexer = lexer
-            ts.repl = lexer.repl
             return ts
         }
 
@@ -238,7 +244,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
          * @return A new Lexer.TokenStream instance
          */
         fun open(file: String): TokenStream {
-            val lx = Lexer(file, Lexer.SourceMode.FILE, false)
+            val lx = Lexer(file, Lexer.SourceMode.FILE)
             return open(lx)
         }
     }
