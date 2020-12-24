@@ -8,13 +8,13 @@ class Report {
     companion object {
         var debug: Boolean = false
         @Contract("_, _, _, false -> halt")
-        fun error(errorType: ErrorType, message: String, faultyToken: Lexer.Token, missing: Boolean = false) {
+        fun error(errorType: ErrorType, message: String, faultyToken: Lexer.Token) {
             val msg = """
                 |A ${errorType.format} occurred at ${faultyToken.toContext()}
                 |Message: $message
                 |line ${faultyToken.line}:
                 | | ${faultyToken.lineContent}
-                |  ${" ".repeat(faultyToken.column + (if (missing) 1 else 0)) + "^"}
+                |  ${" ".repeat(faultyToken.column) + "^"}
                 |${if (debug) "Stack trace:\n" else ""}
             """.trimMargin()
             print(msg)

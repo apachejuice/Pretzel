@@ -3,6 +3,7 @@ package com.pretzel.core.lexer
 
 import com.pretzel.core.ErrorType.LEXER
 import com.pretzel.core.Report
+import com.pretzel.core.ast.Node
 import java.io.File
 import java.util.Stack
 import kotlin.system.exitProcess
@@ -14,6 +15,7 @@ class Lexer(_source: String, mode: SourceMode) {
     }
 
     enum class TokenType {
+        BAND,
         ASSIGN,
         AT,
         BOOL,
@@ -49,8 +51,10 @@ class Lexer(_source: String, mode: SourceMode) {
         MOD,
         MUL,
         NO,
+        BOR,
+        AND,
+        OR,
         NOT,
-        SEMI,
         NOTEQ,
         NOTHING,
         PLUS,
@@ -68,9 +72,15 @@ class Lexer(_source: String, mode: SourceMode) {
         WHEN,
         YES,
         XOR,
+        RSHIFT,
+        URSHIFT,
+        LSHIFT,
+        QUOTE,
         // no token
         INVALID,
     }
+
+    data class LexingException(val last: Token, val source: String) : RuntimeException()
 
     data class Context(val line: Int, val column: Int,
                        val lineContent: String, val file: String) {
@@ -142,14 +152,13 @@ class Lexer(_source: String, mode: SourceMode) {
         }
     }
 
-    private fun cancel(c: Char) {
-        Thread.currentThread().interrupt()
-        cancellationHook.invoke(c)
-        throw IllegalStateException("lexing shoud've been cancelled")
+    private fun cancel(message: String, t: Token) {
+        cancellationHook.invoke(message, t)
+        throw LexingException(t, source)
     }
 
     var hadError: Boolean = false
-    var cancellationHook: (c: Char) -> Unit = { exitProcess(1) }
+    var cancellationHook: (message: String, t: Token) -> Unit = { _: String, _: Token -> }
 
     private val kwds: Map<String, TokenType> = mapOf(
         "bool" to TokenType.BOOL,
@@ -258,9 +267,8 @@ class Lexer(_source: String, mode: SourceMode) {
                     if (next() == '*')
                         if (peek() == '/') break
                     if (isAtEnd()) {
-                        val t = Token("*", TokenType.INVALID, line, column, filename, source.lines()[line - 1])
-                        Report.error(LEXER, "unterminated block comment", t)
-                        cancel('*')
+                        pushToken(TokenType.MUL, "*")
+                        cancel("unexpected EOF in block comment", tokens.lastElement())
                         hadError = true
                         // make sure to not fall in an endless loop
                         next()
@@ -285,9 +293,8 @@ class Lexer(_source: String, mode: SourceMode) {
         }
 
         if (isAtEnd()) {
-            val t = Token("\"", TokenType.INVALID, line, column, filename, source.lines()[line - 1])
-            Report.error(LEXER, "unterminated string", t)
-            cancel('"')
+            pushToken(TokenType.QUOTE, "\"")
+            cancel("unexpected EOF in string constant", tokens.lastElement())
             hadError = true
             return
         }
@@ -372,17 +379,18 @@ class Lexer(_source: String, mode: SourceMode) {
             ',' -> pushToken(TokenType.COMMA, c)
             '-' -> pushToken(TokenType.MINUS, c)
             '+' -> pushToken(TokenType.PLUS, c)
-            ';' -> pushToken(TokenType.SEMI, c)
             '*' -> pushToken(TokenType.MUL, c)
             ':' -> pushToken(TokenType.COLON, c)
             '@' -> pushToken(TokenType.AT, c)
             '#' -> pushToken(TokenType.HASHTAG, c)
             '$' -> pushToken(TokenType.VAR, c)
             '~' -> pushToken(TokenType.TILDE, c)
+            '%' -> pushToken(TokenType.MOD, c)
             '^' -> {
                 if (match('^')) pushToken(TokenType.POW, "^^")
                 else pushToken(TokenType.XOR, '^')
             }
+
             '.' -> {
                 if (match('.')) {
                     if (match('.')) {
@@ -390,6 +398,7 @@ class Lexer(_source: String, mode: SourceMode) {
                     } else pushToken(TokenType.CONCAT_SPACE, "..")
                 } else pushToken(TokenType.DOT, '.')
             }
+
             '!' -> {
                 val tok: String
                 val tt = when {
@@ -397,6 +406,7 @@ class Lexer(_source: String, mode: SourceMode) {
                         tok = "!="
                         TokenType.NOTEQ
                     }
+
                     else -> {
                         tok = "!"
                         TokenType.NOT
@@ -405,6 +415,7 @@ class Lexer(_source: String, mode: SourceMode) {
 
                 pushToken(tt, tok)
             }
+
             '=' -> {
                 val tok: String
                 val tt = when {
@@ -412,6 +423,7 @@ class Lexer(_source: String, mode: SourceMode) {
                         tok = "=="
                         TokenType.EQ
                     }
+
                     else -> {
                         tok = "="
                         TokenType.ASSIGN
@@ -420,6 +432,7 @@ class Lexer(_source: String, mode: SourceMode) {
 
                 pushToken(tt, tok)
             }
+
             '<' -> {
                 val tok: String
                 val tt = when {
@@ -427,6 +440,12 @@ class Lexer(_source: String, mode: SourceMode) {
                         tok = "<="
                         TokenType.LTEQ
                     }
+
+                    match('<') -> {
+                        tok = "<<"
+                        TokenType.LSHIFT
+                    }
+
                     else -> {
                         tok = "<"
                         TokenType.LT
@@ -435,13 +454,23 @@ class Lexer(_source: String, mode: SourceMode) {
 
                 pushToken(tt, tok)
             }
+
             '>' -> {
-                val tok: String
+                var tok: String
                 val tt = when {
                     match('=') -> {
                         tok = ">="
                         TokenType.GTEQ
                     }
+
+                    match('>') -> {
+                        tok = ">>"
+                        if (match('>')) {
+                            tok += ">"
+                            TokenType.URSHIFT
+                        } else TokenType.RSHIFT
+                    }
+
                     else -> {
                         tok = ">"
                         TokenType.GT
@@ -450,18 +479,52 @@ class Lexer(_source: String, mode: SourceMode) {
 
                 pushToken(tt, tok)
             }
+
+            '&' -> {
+                val tok: String
+                val tt = when {
+                    match('&') -> {
+                        tok = "&&"
+                        TokenType.AND
+                    }
+
+                    else -> {
+                        tok = "&"
+                        TokenType.BAND
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+
+            '|' -> {
+                val tok: String
+                val tt = when {
+                    match('|') -> {
+                        tok = "||"
+                        TokenType.OR
+                    }
+
+                    else -> {
+                        tok = "|"
+                        TokenType.BOR
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+
             '/' -> divOrComment()
             ' ', '\r' -> { /* ignore */ }
             '\t' -> { shiftInLine() }
-            '\n' -> line++
+            '\n' -> line++;
             '"', '\'' -> string()
             in '0'..'9' -> number(c, c == '0')
             else -> {
                 if (isAlpha(c)) identifier(c)
                 else {
-                    val t = Token("$c", TokenType.INVALID, line, column - 1, filename, source.lines()[line - 1])
-                    Report.error(LEXER, "unexpected character '$c'.", t)
-                    cancel(c)
+                    pushToken(TokenType.INVALID, c.toString())
+                    cancel("unexpected character '$c'", tokens.lastElement())
                     hadError = true
                 }
             }

@@ -10,8 +10,6 @@ import java.util.Spliterator
 import java.util.function.Consumer
 
 class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
-    private var repl: Boolean = false
-
     /**
      * Returns the lexer used by this instance of Lexer.TokenStream.
      *
@@ -42,7 +40,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             }
         }
 
-        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token, repl)
+        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token)
         return Lexer.Token.Companion.NullToken("")
     }
 
@@ -58,7 +56,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         for (s in applicant) {
             if (tt !== s) {
                 Report.error(
-                    PARSER, "expected symbol of type '$s', got '$tt'", token, repl
+                    PARSER, "expected symbol of type '$s', got '$tt'", token
                 )
             }
         }
@@ -193,7 +191,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
                 java.lang.String.format(
                     "expected identifier, got '%s'",
                     token.lexeme
-                ), token, repl
+                ), token
             )
         }
         return token

@@ -1,6 +1,8 @@
 package com.pretzel
 
+import com.pretzel.core.ErrorType
 import com.pretzel.core.Report
+import com.pretzel.core.ast.Node
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
 import com.pretzel.core.parser.Parser
@@ -21,17 +23,26 @@ class Main {
             Report.debug = "--debug" in args
 
             while (true) {
-                print(">>> ")
-                input = scanner.nextLine()
-                if (input.trim().startsWith("//") && "exit" in input)
-                    exitProcess(0)
-                l = Lexer(input, Lexer.SourceMode.DIRECT)
-                ts = TokenStream.open(l)
-                if (ts.length != 0) {
-                    if (!l.hadError) {
-                        p = Parser.fromLexer(l)
-                        p.parse()
+                try {
+                    print(">>> ")
+                    input = scanner.nextLine()
+                    if (input.trim().startsWith("//") && "exit" in input)
+                        exitProcess(0)
+                    l = Lexer(input, Lexer.SourceMode.DIRECT)
+                    l.cancellationHook = { s: String, t: Lexer.Token -> Report.error(ErrorType.LEXER, s, t) }
+                    ts = TokenStream.open(l)
+                    if (ts.length != 0) {
+                        if (!l.hadError) {
+                            p = Parser.fromLexer(l)
+                            p.cancellationHook = { s: String, token: Lexer.Token, list: List<Node> -> Report.error(ErrorType.PARSER, s, token) }
+                            p.parse()
+                        }
                     }
+
+                } catch (e: Parser.ParsingException) {
+                    println("parsing error on token '${e.last}'")
+                } catch (e: Lexer.LexingException) {
+                    println("lexical error on character '${e.last}'")
                 }
             }
         }

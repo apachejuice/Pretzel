@@ -8,4 +8,5 @@ interface NodeVisitor<T> {
     fun visitUnaryExpression(unaryExpression: UnaryExpression): T
     fun visitLiteral(literal: Literal): T
     fun visitFunctionCall(functionCall: FunctionCall): T
+    fun visitModStmt(modStmt: ModStmt): T
 }
