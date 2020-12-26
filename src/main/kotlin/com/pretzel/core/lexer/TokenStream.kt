@@ -1,3 +1,19 @@
+/*
+ * Copyright 2020 Valio Valtokari
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     <http://www.apache.org/licenses/LICENSE-2.0>
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.pretzel.core.lexer
 
 import com.pretzel.core.ErrorType.PARSER
@@ -10,6 +26,8 @@ import java.util.Spliterator
 import java.util.function.Consumer
 
 class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
+    private var noTail: Boolean = false
+
     /**
      * Returns the lexer used by this instance of Lexer.TokenStream.
      *
@@ -40,7 +58,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             }
         }
 
-        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token)
+        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token, false)
         return Lexer.Token.Companion.NullToken("")
     }
 
@@ -56,7 +74,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         for (s in applicant) {
             if (tt !== s) {
                 Report.error(
-                    PARSER, "expected symbol of type '$s', got '$tt'", token
+                    PARSER, "expected symbol of type '$s', got '$tt'", token, false
                 )
             }
         }
@@ -165,7 +183,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
      */
     fun seek(): Lexer.Token {
         if (idx > tokens.size) throw IndexOutOfBoundsException("idx > tokens.size")
-        else if (idx >= tokens.size) return tokens[tokens.indices.last]
+        if (idx >= tokens.size) return tokens[tokens.indices.last]
         return tokens[idx]
     }
 
@@ -191,7 +209,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
                 java.lang.String.format(
                     "expected identifier, got '%s'",
                     token.lexeme
-                ), token
+                ), token, false
             )
         }
         return token
@@ -215,9 +233,9 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         return tokens.spliterator()
     }
 
-    fun backup(i: Int = -1) {
-        if (i >= 0) throw RuntimeException("cannot push positive numbers, use TokenStream.advance()")
-        idx += i
+    fun backup(i: Int = 1) {
+        if (i < 0) throw RuntimeException("cannot push positive numbers, use TokenStream.advance()")
+        idx -= i
         tokens.removeAt(tokens.indices.last)
     }
 
@@ -245,10 +263,14 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             val lx = Lexer(file, Lexer.SourceMode.FILE)
             return open(lx)
         }
+
+        fun fromTokens(tokens: MutableList<Lexer.Token>): TokenStream {
+            return TokenStream(tokens).also { it.noTail = true }
+        }
     }
 
     init {
-        tokens.removeAt(tokens.size - 1)
+        if (!noTail) tokens.removeAt(tokens.size - 1)
         this.tokens = tokens
         idx = 0
     }

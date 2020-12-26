@@ -16,14 +16,12 @@
 
 package com.pretzel.core.ast
 
-import com.pretzel.core.lexer.Lexer
-
-class FunctionCall(val name: String, start: Lexer.Context, end: Lexer.Context, val args: List<Argument>? = null) : Expression(start, end, Precedence.EXTREMELY_HIGH) {
+class ParsenthesizedExpression(val expression: Expression) : Expression(expression.start, expression.end, Precedence.HIGHEST) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitFunctionCall(this)
+        return visitor.visiParenthesizedExpression(this)
     }
 
     override fun toString(): String {
-        return "$name(${args?.joinToString(separator = ",") { it -> "$it" } ?: ""})"
+        return "($expression)"
     }
 }

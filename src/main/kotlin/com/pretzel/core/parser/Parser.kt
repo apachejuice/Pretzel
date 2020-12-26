@@ -1,15 +1,36 @@
+/*
+ * Copyright 2020 Valio Valtokari
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     <http://www.apache.org/licenses/LICENSE-2.0>
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.pretzel.core.parser
 
 
+import com.pretzel.core.ast.Argument
 import com.pretzel.core.ast.BinaryExpression
 import com.pretzel.core.ast.Expression
 import com.pretzel.core.ast.FunctionCall
 import com.pretzel.core.ast.Literal
 import com.pretzel.core.ast.ModStmt
 import com.pretzel.core.ast.Node
+import com.pretzel.core.ast.ObjectCreation
+import com.pretzel.core.ast.ParsenthesizedExpression
 import com.pretzel.core.ast.Precedence
 import com.pretzel.core.ast.UnaryExpression
 import com.pretzel.core.ast.UseStmt
+import com.pretzel.core.ast.VariableAssignment
+import com.pretzel.core.ast.VariableCreation
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.Lexer.Context
 import com.pretzel.core.lexer.Lexer.SourceMode
@@ -22,20 +43,22 @@ import java.util.StringJoiner
 
 
 class Parser private constructor(val stream: TokenStream) {
-    data class ParsingException(val last: Lexer.Token, val nodes: ArrayList<Node>) : RuntimeException()
+    open class ParsingException(val last: Token, val nodes: MutableList<Node>, val overEOF: Boolean = false) : RuntimeException()
 
     private var hadError: Boolean = false
+    var overEOF: Boolean = false
     private val contextStack: Stack<Context> = Stack()
     private val nodeCache: Stack<Node> = Stack()
-    private val nodes = ArrayList<Node>()
+    private val nodes = mutableListOf<Node>()
 
-    var cancellationHook: (message: String, t: Token, nodes: List<Node>) -> Unit = { _: String, _: Token, _: List<Node> -> }
-    val lexer: Lexer
+    var cancellationHook: (message: String, t: Token, nodes: List<Node>) -> Unit =
+        { _: String, _: Token, _: List<Node> -> }
+    val lexer: Lexer = stream.lexer
     val sourceName: String = stream.lexer.filename
 
     private fun cancel(message: String = "") {
         cancellationHook.invoke(message, stream.seek(), nodes)
-        throw ParsingException(stream.seek(), nodes)
+        throw ParsingException(stream.seek(), nodes, overEOF)
     }
 
     private val context: Context
@@ -50,19 +73,14 @@ class Parser private constructor(val stream: TokenStream) {
     private fun pushContext() {
         contextStack.push(context)
     }
-
-    private fun getContext(i: Int): Context {
-        return contextStack[i]
-    }
+    
+    private fun getStart(): Context = contextStack[contextStack.indices.first]
+    private fun getEnd(): Context = contextStack[contextStack.indices.last]
 
     private fun finishContexts(): Stack<Context> {
         val result = contextStack
         contextStack.clear()
         return result
-    }
-
-    init {
-        this.lexer = stream.lexer
     }
 
     private fun consumeToken(action: (t: Token, c: Context) -> Unit) {
@@ -71,12 +89,16 @@ class Parser private constructor(val stream: TokenStream) {
         } else action.invoke(stream.next(), context)
     }
 
+    private fun consumeToken(tt: TokenType): Boolean {
+        return stream.seek().type == tt
+    }
+
     private fun acceptToken(
         tt: TokenType,
         strict: Boolean = false,
         action: (strict: Boolean, t: Token, c: Context) -> Unit
     ) {
-        val tok = if (strict) stream.accept(tt) else {
+        val tok = if (strict) acceptToken(tt) else {
             stream.acceptIfNext(tt)
             stream.seek()
         }
@@ -89,7 +111,7 @@ class Parser private constructor(val stream: TokenStream) {
             stream.seek().also { stream.advance() }
         } else {
             cancel(
-                "expected symbol of type '$tt', got '${if (stream.hasNext()) stream.seek().type else "EOF"}'",
+                "expected symbol of type '$tt', got '${stream.seek()}'",
             )
             if (stream.hasNext()) stream.next() else stream.seek()
         }
@@ -119,17 +141,119 @@ class Parser private constructor(val stream: TokenStream) {
             when (stream.seek().type) {
                 TokenType.USE -> parseUseStmt()
                 TokenType.MOD -> parseModuleStmt()
-                else -> parseExpression(stream)//error("not implemented yet")
+                TokenType.VAR, TokenType.IDENTIFIER -> parseVariable()
+                else -> parseExpression(stream)
             }
 
             checkAndPushNode()
-            nodes.forEach { println("[$it]") }
         }
 
+        nodes.forEach { println("[$it]") }
         return if (nodes.isEmpty())
             null
         else
             Node.getRootInstance(nodes)
+    }
+
+    private fun parseVariable() {
+        initContexts(pushFirst = true)
+        val isNew = stream.acceptIfNext(TokenType.VAR)
+        val ntok = acceptToken(TokenType.IDENTIFIER)
+        val name = ntok.lexeme!!
+
+        val assign = stream.isNext(
+            TokenType.ASSIGN,
+            TokenType.PLUSSET,
+            TokenType.MINUSSET,
+            TokenType.MULSET,
+            TokenType.DIVSET,
+            TokenType.MODSET,
+            TokenType.BANDSET,
+            TokenType.XORSET,
+            TokenType.POWSET,
+            TokenType.BORSET
+        )
+
+        if (!assign) {
+            pushNodeUnlessError(parseExpression(stream))
+            return
+        }
+
+        if (!assign && isNew) {
+            pushContext()
+            pushNodeUnlessError(VariableCreation(name, null, getStart(), getEnd()))
+            finishContexts()
+            return
+        }
+
+        val tok = stream.seek()
+        val op = tok.type
+        val lit = tok.lexeme!!
+
+        if (op != TokenType.ASSIGN && isNew)
+            cancel("cannot use expression-assignment operator '$lit' when creating new variables")
+
+        if (op == TokenType.ASSIGN && isNew) {
+            pushContext()
+            stream.advance()
+            pushNodeUnlessError(VariableCreation(name, parseExpression(stream), getStart(), getEnd()))
+            finishContexts()
+            return
+        } else if (op == TokenType.ASSIGN && !isNew) {
+            pushContext()
+            stream.advance()
+            pushNodeUnlessError(VariableAssignment(name, parseExpression(stream), getStart(), getEnd()))
+            finishContexts()
+            return
+        } else { // op != TokenType.ASSIGN && !isNew
+            val bop = when (op) {
+                TokenType.PLUSSET -> BinaryOperator.PLUS
+                TokenType.MINUSSET -> BinaryOperator.MINUS
+                TokenType.MULSET -> BinaryOperator.MUL
+                TokenType.DIVSET -> BinaryOperator.DIV
+                TokenType.MODSET -> BinaryOperator.MOD
+                TokenType.BANDSET -> BinaryOperator.BAND
+                TokenType.XORSET -> BinaryOperator.XOR
+                TokenType.POWSET -> BinaryOperator.POW
+                TokenType.BORSET -> BinaryOperator.BOR
+                else -> {
+                    cancel("not reached")
+                    BinaryOperator.UNKNOWN
+                }
+            }
+
+            val precedence = when (bop) {
+                BinaryOperator.PLUS,
+                BinaryOperator.MINUS -> Precedence.PRETTY_HIGH
+                BinaryOperator.MUL,
+                BinaryOperator.DIV,
+                BinaryOperator.MOD -> Precedence.QUITE_HIGH
+                BinaryOperator.BAND -> Precedence.LITTLE_LOW
+                BinaryOperator.XOR -> Precedence.PRETTY_LOW
+                BinaryOperator.POW -> Precedence.VERY_HIGH
+                BinaryOperator.BOR -> Precedence.QUITE_LOW
+                else -> {
+                    cancel("not reached")
+                    null!!
+                }
+            }
+
+            stream.advance()
+            pushContext()
+            pushNodeUnlessError(
+                VariableAssignment(
+                    name,
+                    BinaryExpression(
+                        Literal(ntok),
+                        parseExpression(stream),
+                        bop,
+                        precedence,
+                    ),
+                    getStart(),
+                    getEnd()
+                )
+            )
+        }
     }
 
     //region STATEMENT PARSING
@@ -149,7 +273,7 @@ class Parser private constructor(val stream: TokenStream) {
 
                 result.add(acceptToken(TokenType.IDENTIFIER).lexeme)
                 if (!stream.isNext(TokenType.COLON)) break
-                else stream.accept(TokenType.COLON)
+                else acceptToken(TokenType.COLON)
             }
         } else if (stream.isNext(TokenType.MUL)) wildcard = true
 
@@ -164,13 +288,11 @@ class Parser private constructor(val stream: TokenStream) {
         pushNodeUnlessError(
             UseStmt(
                 result.first.split(":"),
-                getContext(0),
-                getContext(1),
+                getStart(),
+                getEnd(),
                 result.second,
             )
         )
-
-        stream.advance()
     }
 
     private fun parseModuleStmt() {
@@ -183,12 +305,10 @@ class Parser private constructor(val stream: TokenStream) {
         pushNodeUnlessError(
             ModStmt(
                 result.first.split(":"),
-                getContext(0),
-                getContext(1),
+                getStart(),
+                getEnd(),
             )
         )
-
-        stream.advance()
     }
 
     enum class BinaryOperator(val operator: String) {
@@ -224,19 +344,15 @@ class Parser private constructor(val stream: TokenStream) {
         MINUS("-");
     }
 
-    private fun parseExpression(stream: TokenStream) {
-        val node = object : Any() {
-            fun parse(): Expression {
-                return parseExpression()
-            }
-
+    private fun parseExpression(stream: TokenStream): Expression {
+        return object : Any() {
             // Grammar:
             // expression = term | expression `+` term | expression `-` term
             // term = factor | term `*` factor | term `/` factor
             // factor = `+` factor | `-` factor | `(` expression `)`
             //        | number | functionName factor | factor `^` factor
-            private fun parseExpression(): Expression {
-                var e = parseTerm()
+            fun parseExpression(stream: TokenStream = this@Parser.stream): Expression {
+                var e = parseTerm(stream)
                 var op: BinaryOperator
 
                 while (true) {
@@ -244,7 +360,7 @@ class Parser private constructor(val stream: TokenStream) {
                         op = if (stream.seek().type == TokenType.PLUS) BinaryOperator.PLUS else BinaryOperator.MINUS
                         e = BinaryExpression(
                             e,
-                            parseTerm(),
+                            parseTerm(stream),
                             op,
                             Precedence.PRETTY_HIGH
                         )
@@ -252,67 +368,105 @@ class Parser private constructor(val stream: TokenStream) {
                 }
             }
 
-            private fun parseTerm(): Expression {
-                var e = parseFactor()
+            private fun parseTerm(stream: TokenStream): Expression {
+                var e = parseFactor(stream)
                 var op: BinaryOperator
+                var p: Precedence
 
                 while (true) {
-                    if (stream.isNext(
-                            TokenType.DIV,
-                            TokenType.MUL,
-                            TokenType.MOD,
-                            TokenType.AND,
-                            TokenType.BAND,
-                            TokenType.BOR,
-                            TokenType.OR,
-                            TokenType.XOR,
-                            TokenType.LSHIFT,
-                            TokenType.RSHIFT,
-                            TokenType.URSHIFT
-                        )) {
-                        op = when (stream.seek().type) {
-                            TokenType.DIV -> BinaryOperator.DIV
-                            TokenType.MUL -> BinaryOperator.MUL
-                            TokenType.MOD -> BinaryOperator.MOD
-                            TokenType.AND -> BinaryOperator.AND
-                            TokenType.BAND -> BinaryOperator.BAND
-                            TokenType.BOR -> BinaryOperator.BOR
-                            TokenType.OR -> BinaryOperator.OR
-                            TokenType.XOR -> BinaryOperator.XOR
-                            TokenType.LSHIFT -> BinaryOperator.SIGNEDL
-                            TokenType.RSHIFT -> BinaryOperator.SIGNEDR
-                            TokenType.URSHIFT -> BinaryOperator.UNSIGNEDR
-                            else -> {
-                                cancel("unexpected token ${stream.seek().type}")
-                                BinaryOperator.UNKNOWN
-                            }
+                    when (val t = stream.seek().type) {
+                        TokenType.MINUS, TokenType.PLUS -> {
+                            op = BinaryOperator.valueOf(t.name)
+                            p = Precedence.PRETTY_HIGH
                         }
 
-                        stream.advance()
-                        e = BinaryExpression(
-                            e,
-                            parseFactor(),
-                            op,
-                            Precedence.PRETTY_HIGH
-                        )
-                    } else return e
+                        TokenType.DIV, TokenType.MUL, TokenType.MOD -> {
+                            op = BinaryOperator.valueOf(t.name)
+                            p = Precedence.QUITE_HIGH
+                        }
+
+                        TokenType.LSHIFT, TokenType.RSHIFT, TokenType.URSHIFT -> {
+                            op = when (t) {
+                                TokenType.LSHIFT -> BinaryOperator.SIGNEDL
+                                TokenType.RSHIFT -> BinaryOperator.SIGNEDR
+                                TokenType.URSHIFT -> BinaryOperator.UNSIGNEDR
+
+                                // will be never reached but when expressions
+                                // must be exhaustive
+                                else -> {
+                                    cancel("unexpected token ${stream.seek().type}")
+                                    BinaryOperator.UNKNOWN
+                                }
+                            }
+
+                            p = Precedence.LITTLE_HIGH
+                        }
+
+                        TokenType.OR -> {
+                            op = BinaryOperator.OR
+                            p = Precedence.SUPER_LOW
+                        }
+
+                        TokenType.AND -> {
+                            op = BinaryOperator.AND
+                            p = Precedence.VERY_LOW
+                        }
+
+                        TokenType.BOR -> {
+                            op = BinaryOperator.BOR
+                            p = Precedence.QUITE_LOW
+                        }
+
+                        TokenType.XOR -> {
+                            op = BinaryOperator.XOR
+                            p = Precedence.PRETTY_LOW
+                        }
+
+                        TokenType.BAND -> {
+                            op = BinaryOperator.BAND
+                            p = Precedence.LITTLE_LOW
+                        }
+
+                        TokenType.EQ,
+                        TokenType.NOTEQ,
+                        TokenType.GT,
+                        TokenType.GTEQ,
+                        TokenType.LT,
+                        TokenType.LTEQ -> {
+                            op = BinaryOperator.valueOf(t.name)
+                            p = Precedence.MEDIUM
+                        }
+
+                        else -> return e
+                    }
+
+                    stream.advance()
+                    e = BinaryExpression(
+                        e,
+                        parseFactor(stream),
+                        op,
+                        p,
+                    )
                 }
             }
 
-            private fun parseFactor(): Expression {
+            private fun parseFactor(stream: TokenStream): Expression {
                 if (stream.acceptIfNext(TokenType.PLUS)) return UnaryExpression(
-                    parseFactor(),
+                    parseFactor(stream),
                     UnaryOperator.PLUS
                 ) // unary plus
                 if (stream.acceptIfNext(TokenType.MINUS)) return UnaryExpression(
-                    parseFactor(),
+                    parseFactor(stream),
                     UnaryOperator.MINUS
                 ) // unary minus
                 if (stream.acceptIfNext(TokenType.TILDE)) return UnaryExpression(
-                    parseFactor(),
+                    parseFactor(stream),
                     UnaryOperator.NEG
                 ) // negate
-                if (stream.acceptIfNext(TokenType.NOT)) return UnaryExpression(parseFactor(), UnaryOperator.NOT) // not
+                if (stream.acceptIfNext(TokenType.NOT)) return UnaryExpression(
+                    parseFactor(stream),
+                    UnaryOperator.NOT
+                ) // not
                 var e: Expression
 
                 if (stream.acceptIfNext(TokenType.LPAREN)) { // parentheses
@@ -321,19 +475,21 @@ class Parser private constructor(val stream: TokenStream) {
                         return Literal(stream.seek())
                     }
 
-                    e = parseExpression()
-                    stream.accept(TokenType.RPAREN)
-                } else e = parseValue()
+                    e = ParsenthesizedExpression(this.parseExpression(stream))
+                    acceptToken(TokenType.RPAREN)
+                } else e = parseValue(stream)
 
                 if (stream.acceptIfNext(TokenType.POW)) e =
-                    BinaryExpression(e, parseFactor(), BinaryOperator.POW, Precedence.VERY_HIGH)
+                    BinaryExpression(e, parseFactor(stream), BinaryOperator.POW, Precedence.VERY_HIGH)
                 return e
             }
 
-            private fun parseValue(): Expression {
+            private fun parseValue(stream: TokenStream): Expression {
                 val e: Expression
+                initContexts(pushFirst = true)
 
-                if (stream.isNext(
+                when {
+                    stream.isNext(
                         TokenType.INTEGER_LITERAL,
                         TokenType.FLOAT_LITERAL,
                         TokenType.SHORT_LITERAL,
@@ -341,32 +497,75 @@ class Parser private constructor(val stream: TokenStream) {
                         TokenType.LONG_LITERAL,
                         TokenType.YES,
                         TokenType.NO,
-                    )
-                ) {
-                    e = Literal(stream.seek())
-                    stream.advance()
-                } else if (stream.isNext(TokenType.IDENTIFIER)) {
-                    val t = stream.seek()
-                    stream.advance()
-                    e = if (stream.isNext(TokenType.LPAREN)) {
+                        TokenType.NOTHING
+                    ) -> {
+                        e = Literal(stream.seek())
                         stream.advance()
-                        stream.accept(TokenType.RPAREN)
-                        FunctionCall(t.lexeme.toString(), t.toContext(), context)
-                    } else Literal(t)
-                    stream.advance()
-                } else {
-                    cancel("unexpected token '${stream.seek().type}'")
-                    e = Literal(stream.seek())
-                    stream.advance()
+                    }
+
+                    stream.acceptIfNext(TokenType.NEW) -> {
+                        val name = acceptToken(TokenType.IDENTIFIER).lexeme!!
+                        val args = mutableListOf<Argument>()
+                        acceptToken(TokenType.LPAREN)
+                        args.addAll(parseArgumentList())
+                        acceptToken(TokenType.RPAREN)
+                        pushContext()
+                        e = ObjectCreation(name, args, getStart(), getEnd())
+
+                    }
+
+                    stream.isNext(TokenType.IDENTIFIER) -> {
+                        val t = acceptToken(TokenType.IDENTIFIER)
+                        e = if (stream.isNext(TokenType.LPAREN)) {
+                            val args = mutableListOf<Argument>()
+                            acceptToken(TokenType.LPAREN)
+                            args.addAll(parseArgumentList())
+                            acceptToken(TokenType.RPAREN)
+                            FunctionCall(t.lexeme!!, t.toContext(), context, args)
+                        } else Literal(t)
+                    }
+
+                    else -> {
+                        cancel("unexpected token '${if (stream.hasNext()) stream.seek().type else "EOF".also { overEOF = true }}', expected expression or value")
+                        e = Literal(stream.seek())
+                        stream.advance()
+                    }
                 }
 
                 return e
             }
 
-        }.parse()
+            // stolen from
+            // https://gitlab.gnome.org/GNOME/vala/-/blob/master/vala/valaparser.vala#L609
+            private fun parseArgumentList(): List<Argument> {
+                val list = mutableListOf<Argument>()
 
-        pushNodeUnlessError(node)
-        checkAndPushNode()
+                if (!stream.isNext(TokenType.RPAREN)) {
+                    do {
+                        // possible trailing comma
+                        if (stream.isNext(TokenType.RPAREN)) break
+
+                        list.add(parseArgument())
+                    } while (stream.acceptIfNext(TokenType.COMMA))
+                }
+
+                return list
+            }
+
+            private fun parseArgument(): Argument {
+                var name: String? = null
+
+                if (stream.isNext(TokenType.IDENTIFIER)) {
+                    name = acceptToken(TokenType.IDENTIFIER).lexeme
+                    if (stream.isNext(TokenType.COLON)) stream.advance()
+                }
+
+                val expr = parseExpression()
+                return Argument(expr, name)
+            }
+
+
+        }.parseExpression()
     }
 
     //endregion

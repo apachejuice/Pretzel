@@ -18,12 +18,12 @@ package com.pretzel.core.ast
 
 import com.pretzel.core.lexer.Lexer
 
-class FunctionCall(val name: String, start: Lexer.Context, end: Lexer.Context, val args: List<Argument>? = null) : Expression(start, end, Precedence.EXTREMELY_HIGH) {
+class ObjectCreation(val name: String, val args: List<Argument>? = null, start: Lexer.Context, end: Lexer.Context) : Expression(start, end, Precedence.VERY_HIGH) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitFunctionCall(this)
+        return visitor.visitObjectCreation(this)
     }
 
     override fun toString(): String {
-        return "$name(${args?.joinToString(separator = ",") { it -> "$it" } ?: ""})"
+        return "new $name(${args?.joinToString(separator = ",") { it -> "$it" } ?: ""})"
     }
 }

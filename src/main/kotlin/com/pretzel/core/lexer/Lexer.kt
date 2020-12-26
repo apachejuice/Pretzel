@@ -1,12 +1,24 @@
+/*
+ * Copyright 2020 Valio Valtokari
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     <http://www.apache.org/licenses/LICENSE-2.0>
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.pretzel.core.lexer
 
-
-import com.pretzel.core.ErrorType.LEXER
-import com.pretzel.core.Report
-import com.pretzel.core.ast.Node
 import java.io.File
 import java.util.Stack
-import kotlin.system.exitProcess
+
 
 class Lexer(_source: String, mode: SourceMode) {
     enum class SourceMode {
@@ -15,6 +27,18 @@ class Lexer(_source: String, mode: SourceMode) {
     }
 
     enum class TokenType {
+        PLUSSET,
+        MINUSSET,
+        MULSET,
+        DIVSET,
+        MODSET,
+        BANDSET,
+        XORSET,
+        POWSET,
+        BORSET,
+        RSHIFTSET,
+        URSHIFTSET,
+        LSHIFTSET,
         BAND,
         ASSIGN,
         AT,
@@ -48,6 +72,7 @@ class Lexer(_source: String, mode: SourceMode) {
         LT,
         LTEQ,
         MINUS,
+        NEW,
         MOD,
         MUL,
         NO,
@@ -76,14 +101,17 @@ class Lexer(_source: String, mode: SourceMode) {
         URSHIFT,
         LSHIFT,
         QUOTE,
+
         // no token
         INVALID,
     }
 
     data class LexingException(val last: Token, val source: String) : RuntimeException()
 
-    data class Context(val line: Int, val column: Int,
-                       val lineContent: String, val file: String) {
+    data class Context(
+        val line: Int, val column: Int,
+        val lineContent: String, val file: String
+    ) {
         override operator fun equals(other: Any?): Boolean {
             if (other == null || other !is Context)
                 return false
@@ -110,7 +138,8 @@ class Lexer(_source: String, mode: SourceMode) {
 
     open class Token(
         val lexeme: String?, val type: TokenType, val line: Int,
-        val column: Int, val file: String, val lineContent: String) {
+        val column: Int, val file: String, val lineContent: String
+    ) {
         companion object {
             class NullToken(file: String) : Token("", TokenType.INVALID, -1, -1, file, "")
         }
@@ -171,6 +200,7 @@ class Lexer(_source: String, mode: SourceMode) {
         "in" to TokenType.IN,
         "is" to TokenType.IS,
         "no" to TokenType.NO,
+        "new" to TokenType.NEW,
         "nothing" to TokenType.NOTHING,
         "use" to TokenType.USE,
         "when" to TokenType.WHEN,
@@ -303,6 +333,14 @@ class Lexer(_source: String, mode: SourceMode) {
         pushToken(TokenType.STRING_LITERAL, result.toString())
     }
 
+    private fun templateString() {
+        next()
+        string()
+
+        val template = tokens.pop()
+        pushToken(TokenType.TEMPLATE_STRING, template.lexeme)
+    }
+
     private fun number(startDigit: Char, possibleHex: Boolean, returnString: Boolean = false): String? {
         val result = StringBuilder()
         val ishex = possibleHex && peek().toLowerCase() == 'x'
@@ -357,14 +395,13 @@ class Lexer(_source: String, mode: SourceMode) {
         // See if the identifier is a reserved word.
         val text = result.toString()
 
-        val type: TokenType?
-        type = if (text !in kwds.keys) TokenType.IDENTIFIER
+        val type = if (text !in kwds.keys) TokenType.IDENTIFIER
         else kwds[text]
         pushToken(type!!, result.toString())
     }
 
     private fun pushToken(type: TokenType, literal: String? = null) =
-                    tokens.push(Token(literal, type, line, column - 1, filename, source.lines()[line - 1]))
+        tokens.push(Token(literal, type, line, column - 1, filename, source.lines()[line - 1]))
 
     private fun pushToken(type: TokenType, literal: Char) = pushToken(type, "%c".format(literal))
 
@@ -377,18 +414,110 @@ class Lexer(_source: String, mode: SourceMode) {
             '[' -> pushToken(TokenType.LSQB, c)
             ']' -> pushToken(TokenType.RSQB, c)
             ',' -> pushToken(TokenType.COMMA, c)
-            '-' -> pushToken(TokenType.MINUS, c)
-            '+' -> pushToken(TokenType.PLUS, c)
-            '*' -> pushToken(TokenType.MUL, c)
             ':' -> pushToken(TokenType.COLON, c)
-            '@' -> pushToken(TokenType.AT, c)
             '#' -> pushToken(TokenType.HASHTAG, c)
             '$' -> pushToken(TokenType.VAR, c)
             '~' -> pushToken(TokenType.TILDE, c)
-            '%' -> pushToken(TokenType.MOD, c)
+
+            '@' -> {
+                if (match('"'))
+                    templateString()
+                else pushToken(TokenType.AT, c)
+            }
+
             '^' -> {
-                if (match('^')) pushToken(TokenType.POW, "^^")
-                else pushToken(TokenType.XOR, '^')
+                val tok: String
+                val tt = when {
+                    match('^') -> {
+                        if (match('=')) {
+                            tok = "^^="
+                            TokenType.POWSET
+                        } else {
+                            tok = "^^"
+                            TokenType.POW
+                        }
+                    }
+
+                    match('=') -> {
+                        tok = "^="
+                        TokenType.XORSET
+                    }
+
+                    else -> {
+                        tok = "^"
+                        TokenType.XOR
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+
+            '-' -> {
+                val tok: String
+                val tt = when {
+                    match('=') -> {
+                        tok = "-="
+                        TokenType.MINUSSET
+                    }
+
+                    else -> {
+                        tok = "-"
+                        TokenType.MINUS
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+
+            '*' -> {
+                val tok: String
+                val tt = when {
+                    match('=') -> {
+                        tok = "*="
+                        TokenType.MULSET
+                    }
+
+                    else -> {
+                        tok = "*"
+                        TokenType.MUL
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+
+            '%' -> {
+                val tok: String
+                val tt = when {
+                    match('=') -> {
+                        tok = "%="
+                        TokenType.MODSET
+                    }
+
+                    else -> {
+                        tok = "%"
+                        TokenType.MOD
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+
+            '+' -> {
+                val tok: String
+                val tt = when {
+                    match('=') -> {
+                        tok = "+="
+                        TokenType.PLUSSET
+                    }
+
+                    else -> {
+                        tok = "+"
+                        TokenType.PLUS
+                    }
+                }
+
+                pushToken(tt, tok)
             }
 
             '.' -> {
@@ -442,8 +571,13 @@ class Lexer(_source: String, mode: SourceMode) {
                     }
 
                     match('<') -> {
-                        tok = "<<"
-                        TokenType.LSHIFT
+                        if (match('=')) {
+                            tok = "<<="
+                            TokenType.LSHIFTSET
+                        } else {
+                            tok = "<<"
+                            TokenType.LSHIFT
+                        }
                     }
 
                     else -> {
@@ -456,7 +590,7 @@ class Lexer(_source: String, mode: SourceMode) {
             }
 
             '>' -> {
-                var tok: String
+                val tok: String
                 val tt = when {
                     match('=') -> {
                         tok = ">="
@@ -464,11 +598,27 @@ class Lexer(_source: String, mode: SourceMode) {
                     }
 
                     match('>') -> {
-                        tok = ">>"
-                        if (match('>')) {
-                            tok += ">"
-                            TokenType.URSHIFT
-                        } else TokenType.RSHIFT
+                        when {
+                            match('=') -> {
+                                tok = ">>="
+                                TokenType.RSHIFTSET
+                            }
+
+                            match('>') -> {
+                                if (match('=')) {
+                                    tok = ">>>="
+                                    TokenType.URSHIFTSET
+                                } else {
+                                    tok = ">>>"
+                                    TokenType.URSHIFT
+                                }
+                            }
+
+                            else -> {
+                                tok = ">>"
+                                TokenType.RSHIFT
+                            }
+                        }
                     }
 
                     else -> {
@@ -483,6 +633,11 @@ class Lexer(_source: String, mode: SourceMode) {
             '&' -> {
                 val tok: String
                 val tt = when {
+                    match('=') -> {
+                        tok = "&="
+                        TokenType.BANDSET
+                    }
+
                     match('&') -> {
                         tok = "&&"
                         TokenType.AND
@@ -500,6 +655,11 @@ class Lexer(_source: String, mode: SourceMode) {
             '|' -> {
                 val tok: String
                 val tt = when {
+                    match('=') -> {
+                        tok = "|="
+                        TokenType.BORSET
+                    }
+
                     match('|') -> {
                         tok = "||"
                         TokenType.OR
@@ -514,10 +674,15 @@ class Lexer(_source: String, mode: SourceMode) {
                 pushToken(tt, tok)
             }
 
-            '/' -> divOrComment()
+            '/' -> {
+                if (match('=')) pushToken(TokenType.DIVSET, "/=")
+                else divOrComment()
+            }
+
             ' ', '\r' -> { /* ignore */ }
-            '\t' -> { shiftInLine() }
-            '\n' -> line++;
+
+            '\t' -> shiftInLine()
+            '\n' -> line++
             '"', '\'' -> string()
             in '0'..'9' -> number(c, c == '0')
             else -> {
