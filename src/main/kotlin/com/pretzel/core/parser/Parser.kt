@@ -22,6 +22,7 @@ import com.pretzel.core.ast.BinaryExpression
 import com.pretzel.core.ast.Expression
 import com.pretzel.core.ast.FunctionCall
 import com.pretzel.core.ast.Literal
+import com.pretzel.core.ast.MemberAccess
 import com.pretzel.core.ast.ModStmt
 import com.pretzel.core.ast.Node
 import com.pretzel.core.ast.ObjectCreation
@@ -31,6 +32,7 @@ import com.pretzel.core.ast.UnaryExpression
 import com.pretzel.core.ast.UseStmt
 import com.pretzel.core.ast.VariableAssignment
 import com.pretzel.core.ast.VariableCreation
+import com.pretzel.core.ast.VariableReference
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.Lexer.Context
 import com.pretzel.core.lexer.Lexer.SourceMode
@@ -83,13 +85,15 @@ class Parser private constructor(val stream: TokenStream) {
         return result
     }
     
-    private fun acceptToken(vararg tt: TokenType): Token {
+    private fun acceptToken(vararg tt: TokenType, missing: Boolean = false): Token {
         return if (stream.seek().type in tt) {
             stream.seek().also { stream.advance() }
         } else {
+            overEOF = true
             cancel(
-                "expected one of '${tt.joinToString(separator = " ,") { "$it" }}', got '${stream.seek()}'",
+                "expected one of '${tt.joinToString(separator = " ,") { "$it" }}', got '${if (missing) "EOF" else stream.seek()}'",
             )
+            overEOF = false
             if (stream.hasNext()) stream.next() else stream.seek()
         }
     }
@@ -119,17 +123,109 @@ class Parser private constructor(val stream: TokenStream) {
                 TokenType.USE -> parseUseStmt()
                 TokenType.MOD -> parseModuleStmt()
                 TokenType.VAR -> parseVariable()
+                TokenType.IDENTIFIER -> parseAssignment()
                 else -> pushNodeUnlessError(parseExpression(stream))
             }
 
+            acceptToken(TokenType.SEMI, missing = true)
             checkAndPushNode()
         }
 
-        nodes.forEach { println("[$it] (${it.javaClass.name})") }
+        nodes.forEach { println("[$it]      (${it.javaClass.name})") }
         return if (nodes.isEmpty())
             null
         else
             Node.getRootInstance(nodes)
+    }
+
+    private fun parseAssignment() {
+        initContexts(pushFirst = true)
+        val name = acceptToken(TokenType.IDENTIFIER)
+        val isOp = stream.isNext(*ASSIGNMENT_OP)
+
+        if (!isOp) {
+            stream.position--
+            pushNodeUnlessError(parseExpression(stream))
+            return
+        } else {
+            val op = stream.next().type
+            if (op == TokenType.ASSIGN) {
+                pushContext()
+                pushNodeUnlessError(VariableAssignment(name.lexeme!!, parseExpression(stream), getStart(), getEnd()))
+                finishContexts()
+                return
+            } else {
+                val precedence: Precedence
+                val biop = when (op) {
+                    TokenType.PLUSSET -> {
+                        precedence = Precedence.PRETTY_LOW
+                        BinaryOperator.PLUS
+                    }
+
+                    TokenType.MINUSSET -> {
+                        precedence = Precedence.PRETTY_LOW
+                        BinaryOperator.MINUS
+                    }
+
+                    TokenType.MULSET -> {
+                        precedence = Precedence.QUITE_HIGH
+                        BinaryOperator.MUL
+                    }
+
+                    TokenType.DIVSET -> {
+                        precedence = Precedence.QUITE_HIGH
+                        BinaryOperator.DIV
+                    }
+
+                    TokenType.MODSET -> {
+                        precedence = Precedence.QUITE_HIGH
+                        BinaryOperator.MOD
+                    }
+
+                    TokenType.BANDSET -> {
+                        precedence = Precedence.LITTLE_LOW
+                        BinaryOperator.BAND
+                    }
+
+                    TokenType.XORSET -> {
+                        precedence = Precedence.PRETTY_LOW
+                        BinaryOperator.XOR
+                    }
+
+                    TokenType.POWSET -> {
+                        precedence = Precedence.VERY_HIGH
+                        BinaryOperator.POW
+                    }
+
+                    TokenType.BORSET -> {
+                        precedence = Precedence.QUITE_LOW
+                        BinaryOperator.BOR
+                    }
+
+                    else -> {
+                        cancel("not reached")
+                        precedence = null!!
+                        BinaryOperator.UNKNOWN
+                    }
+                }
+
+                pushContext()
+                pushNodeUnlessError(
+                    VariableAssignment(
+                        name.lexeme!!,
+                        BinaryExpression(
+                            VariableReference(name),
+                            parseExpression(stream),
+                            biop,
+                            precedence
+                        ),
+                        getStart(),
+                        getEnd(),
+                    )
+                )
+                finishContexts()
+            }
+        }
     }
 
     private fun parseVariable() {
@@ -140,18 +236,7 @@ class Parser private constructor(val stream: TokenStream) {
 
         // including other assignment operators
         // for more specific error messages
-        val assign = stream.isNext(
-            TokenType.ASSIGN,
-            TokenType.PLUSSET,
-            TokenType.MINUSSET,
-            TokenType.MULSET,
-            TokenType.DIVSET,
-            TokenType.MODSET,
-            TokenType.BANDSET,
-            TokenType.XORSET,
-            TokenType.POWSET,
-            TokenType.BORSET
-        )
+        val assign = stream.isNext(*ASSIGNMENT_OP)
 
         if (!assign) {
             pushContext()
@@ -301,6 +386,14 @@ class Parser private constructor(val stream: TokenStream) {
 
                 while (true) {
                     when (val t = stream.seek().type) {
+                        TokenType.DOT -> {
+                            stream.advance()
+                            return MemberAccess(
+                                e,
+                                parseMemberAccessor(stream),
+                            )
+                        }
+
                         TokenType.MINUS, TokenType.PLUS -> {
                             op = BinaryOperator.valueOf(t.name)
                             p = Precedence.PRETTY_HIGH
@@ -376,6 +469,26 @@ class Parser private constructor(val stream: TokenStream) {
                 }
             }
 
+            private fun parseMemberAccessor(stream: TokenStream): Expression {
+                val e: Expression
+
+                if (stream.isNext(TokenType.IDENTIFIER)) {
+                    val t = acceptToken(TokenType.IDENTIFIER)
+                    e = if (stream.isNext(TokenType.LPAREN)) {
+                        val args = mutableListOf<Argument>()
+                        acceptToken(TokenType.LPAREN)
+                        args.addAll(parseArgumentList())
+                        acceptToken(TokenType.RPAREN)
+                        FunctionCall(t.lexeme!!, t.toContext(), context, args)
+                    } else VariableReference(t)
+                } else {
+                    cancel("unexpected token '${stream.seek().type}', expected function call or member variable")
+                    e = null!!
+                }
+
+                return e
+            }
+
             private fun parseFactor(stream: TokenStream): Expression {
                 if (stream.acceptIfNext(TokenType.PLUS)) return UnaryExpression(
                     parseFactor(stream),
@@ -398,7 +511,7 @@ class Parser private constructor(val stream: TokenStream) {
                 if (stream.acceptIfNext(TokenType.LPAREN)) { // parentheses
                     if (stream.isNext(TokenType.RPAREN)) {
                         cancel("expected expression, got '${stream.seek().type}'")
-                        return Literal(stream.seek())
+                        return null!!
                     }
 
                     e = ParsenthesizedExpression(this.parseExpression(stream))
@@ -448,12 +561,12 @@ class Parser private constructor(val stream: TokenStream) {
                             args.addAll(parseArgumentList())
                             acceptToken(TokenType.RPAREN)
                             FunctionCall(t.lexeme!!, t.toContext(), context, args)
-                        } else Literal(t)
+                        } else VariableReference(t)
                     }
 
                     else -> {
                         cancel("unexpected token '${if (stream.hasNext()) stream.seek().type else "EOF".also { overEOF = true }}', expected expression or value")
-                        e = Literal(stream.seek())
+                        e = null!!
                         stream.advance()
                     }
                 }
@@ -498,6 +611,19 @@ class Parser private constructor(val stream: TokenStream) {
     //endregion
 
     companion object {
+        val ASSIGNMENT_OP = arrayOf(
+            TokenType.ASSIGN,
+            TokenType.PLUSSET,
+            TokenType.MINUSSET,
+            TokenType.MULSET,
+            TokenType.DIVSET,
+            TokenType.MODSET,
+            TokenType.BANDSET,
+            TokenType.XORSET,
+            TokenType.POWSET,
+            TokenType.BORSET,
+        )
+
         // Utility methods to get an instance
         fun fromFile(filename: String): Parser {
             return Parser(TokenStream.open(filename))

@@ -30,4 +30,6 @@ interface NodeVisitor<T> {
     fun visiParenthesizedExpression(parsenthesizedExpression: ParsenthesizedExpression): T
     fun visitVariableCreation(variableCreation: VariableCreation): T
     fun visitVariableAssignment(variableAssignment: VariableAssignment): T
+    fun visitMemberAccess(memberAccess: MemberAccess): T
+    fun visitVariableReference(variableReference: VariableReference): T
 }

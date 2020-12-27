@@ -27,6 +27,8 @@ import java.util.function.Consumer
 
 class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
     private var noTail: Boolean = false
+    val tokens: MutableList<Lexer.Token>
+        get() = _tokens
 
     /**
      * Returns the lexer used by this instance of Lexer.TokenStream.
@@ -34,7 +36,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
      * @return The lexer used by this Lexer.TokenStream
      */
     lateinit var lexer: Lexer
-    val tokens: MutableList<Lexer.Token>
+    private lateinit var _tokens: MutableList<Lexer.Token>
     private var idx: Int
     val length: Int
         get() = tokens.size
@@ -216,7 +218,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
     }
 
     override fun toString(): String {
-        return tokens.toString()
+        return "$tokens:$position"
     }
 
     override fun iterator(): MutableIterator<Lexer.Token> {
@@ -231,12 +233,6 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
 
     override fun spliterator(): Spliterator<Lexer.Token?> {
         return tokens.spliterator()
-    }
-
-    fun backup(i: Int = 1) {
-        if (i < 0) throw RuntimeException("cannot push positive numbers, use TokenStream.advance()")
-        idx -= i
-        tokens.removeAt(tokens.indices.last)
     }
 
     companion object {
@@ -271,7 +267,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
 
     init {
         if (!noTail) tokens.removeAt(tokens.size - 1)
-        this.tokens = tokens
+        this._tokens = tokens
         idx = 0
     }
 }

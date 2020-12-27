@@ -101,7 +101,7 @@ class Lexer(_source: String, mode: SourceMode) {
         URSHIFT,
         LSHIFT,
         QUOTE,
-
+        SEMI,
         // no token
         INVALID,
     }
@@ -418,6 +418,7 @@ class Lexer(_source: String, mode: SourceMode) {
             '#' -> pushToken(TokenType.HASHTAG, c)
             '$' -> pushToken(TokenType.VAR, c)
             '~' -> pushToken(TokenType.TILDE, c)
+            ';' -> pushToken(TokenType.SEMI, c)
 
             '@' -> {
                 if (match('"'))

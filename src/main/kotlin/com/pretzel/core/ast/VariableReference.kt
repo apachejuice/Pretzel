@@ -18,13 +18,8 @@ package com.pretzel.core.ast
 
 import com.pretzel.core.lexer.Lexer
 
-open class Literal(private val token: Lexer.Token) : Expression(token.toContext(), token.toContext(), Precedence.LOWEST) {
+class VariableReference(val token: Lexer.Token) : Literal(token) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitLiteral(this)
+        return visitor.visitVariableReference(this)
     }
-
-    override fun toString(): String = token.lexeme ?: "null"
-
-    val type: Lexer.TokenType
-        get() = token.type
 }
