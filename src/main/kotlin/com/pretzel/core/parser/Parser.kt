@@ -82,36 +82,13 @@ class Parser private constructor(val stream: TokenStream) {
         contextStack.clear()
         return result
     }
-
-    private fun consumeToken(action: (t: Token, c: Context) -> Unit) {
-        if (!stream.hasNext()) {
-            cancel("expected token, got 'EOF'")
-        } else action.invoke(stream.next(), context)
-    }
-
-    private fun consumeToken(tt: TokenType): Boolean {
-        return stream.seek().type == tt
-    }
-
-    private fun acceptToken(
-        tt: TokenType,
-        strict: Boolean = false,
-        action: (strict: Boolean, t: Token, c: Context) -> Unit
-    ) {
-        val tok = if (strict) acceptToken(tt) else {
-            stream.acceptIfNext(tt)
-            stream.seek()
-        }
-
-        return action.invoke(strict, tok, context)
-    }
-
-    private fun acceptToken(tt: TokenType): Token {
-        return if (stream.isNext(tt)) {
+    
+    private fun acceptToken(vararg tt: TokenType): Token {
+        return if (stream.seek().type in tt) {
             stream.seek().also { stream.advance() }
         } else {
             cancel(
-                "expected symbol of type '$tt', got '${stream.seek()}'",
+                "expected one of '${tt.joinToString(separator = " ,") { "$it" }}', got '${stream.seek()}'",
             )
             if (stream.hasNext()) stream.next() else stream.seek()
         }
@@ -141,8 +118,8 @@ class Parser private constructor(val stream: TokenStream) {
             when (stream.seek().type) {
                 TokenType.USE -> parseUseStmt()
                 TokenType.MOD -> parseModuleStmt()
-                TokenType.VAR, TokenType.IDENTIFIER -> parseVariable()
-                else -> parseExpression(stream)
+                TokenType.VAR -> parseVariable()
+                else -> pushNodeUnlessError(parseExpression(stream))
             }
 
             checkAndPushNode()
@@ -157,10 +134,12 @@ class Parser private constructor(val stream: TokenStream) {
 
     private fun parseVariable() {
         initContexts(pushFirst = true)
-        val isNew = stream.acceptIfNext(TokenType.VAR)
+        acceptToken(TokenType.VAR)
         val ntok = acceptToken(TokenType.IDENTIFIER)
         val name = ntok.lexeme!!
 
+        // including other assignment operators
+        // for more specific error messages
         val assign = stream.isNext(
             TokenType.ASSIGN,
             TokenType.PLUSSET,
@@ -175,11 +154,6 @@ class Parser private constructor(val stream: TokenStream) {
         )
 
         if (!assign) {
-            pushNodeUnlessError(parseExpression(stream))
-            return
-        }
-
-        if (!assign && isNew) {
             pushContext()
             pushNodeUnlessError(VariableCreation(name, null, getStart(), getEnd()))
             finishContexts()
@@ -190,69 +164,21 @@ class Parser private constructor(val stream: TokenStream) {
         val op = tok.type
         val lit = tok.lexeme!!
 
-        if (op != TokenType.ASSIGN && isNew)
+        if (op != TokenType.ASSIGN)
             cancel("cannot use expression-assignment operator '$lit' when creating new variables")
 
-        if (op == TokenType.ASSIGN && isNew) {
+        if (op == TokenType.ASSIGN) {
             pushContext()
             stream.advance()
             pushNodeUnlessError(VariableCreation(name, parseExpression(stream), getStart(), getEnd()))
             finishContexts()
             return
-        } else if (op == TokenType.ASSIGN && !isNew) {
+        } else if (op == TokenType.ASSIGN) {
             pushContext()
             stream.advance()
             pushNodeUnlessError(VariableAssignment(name, parseExpression(stream), getStart(), getEnd()))
             finishContexts()
             return
-        } else { // op != TokenType.ASSIGN && !isNew
-            val bop = when (op) {
-                TokenType.PLUSSET -> BinaryOperator.PLUS
-                TokenType.MINUSSET -> BinaryOperator.MINUS
-                TokenType.MULSET -> BinaryOperator.MUL
-                TokenType.DIVSET -> BinaryOperator.DIV
-                TokenType.MODSET -> BinaryOperator.MOD
-                TokenType.BANDSET -> BinaryOperator.BAND
-                TokenType.XORSET -> BinaryOperator.XOR
-                TokenType.POWSET -> BinaryOperator.POW
-                TokenType.BORSET -> BinaryOperator.BOR
-                else -> {
-                    cancel("not reached")
-                    BinaryOperator.UNKNOWN
-                }
-            }
-
-            val precedence = when (bop) {
-                BinaryOperator.PLUS,
-                BinaryOperator.MINUS -> Precedence.PRETTY_HIGH
-                BinaryOperator.MUL,
-                BinaryOperator.DIV,
-                BinaryOperator.MOD -> Precedence.QUITE_HIGH
-                BinaryOperator.BAND -> Precedence.LITTLE_LOW
-                BinaryOperator.XOR -> Precedence.PRETTY_LOW
-                BinaryOperator.POW -> Precedence.VERY_HIGH
-                BinaryOperator.BOR -> Precedence.QUITE_LOW
-                else -> {
-                    cancel("not reached")
-                    null!!
-                }
-            }
-
-            stream.advance()
-            pushContext()
-            pushNodeUnlessError(
-                VariableAssignment(
-                    name,
-                    BinaryExpression(
-                        Literal(ntok),
-                        parseExpression(stream),
-                        bop,
-                        precedence,
-                    ),
-                    getStart(),
-                    getEnd()
-                )
-            )
         }
     }
 
