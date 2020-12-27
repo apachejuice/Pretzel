@@ -125,7 +125,7 @@ class Parser private constructor(val stream: TokenStream) {
             checkAndPushNode()
         }
 
-        nodes.forEach { println("[$it]") }
+        nodes.forEach { println("[$it] (${it.javaClass.name})") }
         return if (nodes.isEmpty())
             null
         else
