@@ -23,5 +23,5 @@ class Argument(val e: Expression, val name: String? = null) : Node(e.start, e.en
         return visitor.visitArgument(this)
     }
 
-    override fun toString(): String = (if (name == null) "" else "$name:") + e
+    override fun toString(): String = (if (name == null) "" else "$name: ") + e
 }

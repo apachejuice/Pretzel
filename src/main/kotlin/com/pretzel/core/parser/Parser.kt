@@ -45,7 +45,8 @@ import java.util.StringJoiner
 
 
 class Parser private constructor(val stream: TokenStream) {
-    open class ParsingException(val last: Token, val nodes: MutableList<Node>, val overEOF: Boolean = false) : RuntimeException()
+    open class ParsingException(val last: Token, val nodes: MutableList<Node>, val overEOF: Boolean = false) :
+        RuntimeException()
 
     private var hadError: Boolean = false
     private val contextStack: Stack<Context> = Stack()
@@ -74,7 +75,7 @@ class Parser private constructor(val stream: TokenStream) {
     private fun pushContext() {
         contextStack.push(context)
     }
-    
+
     private fun getStart(): Context = contextStack[contextStack.indices.first]
     private fun getEnd(): Context = contextStack[contextStack.indices.last]
 
@@ -83,7 +84,7 @@ class Parser private constructor(val stream: TokenStream) {
         contextStack.clear()
         return result
     }
-    
+
     private fun acceptToken(vararg tt: TokenType, missing: Boolean = false): Token {
         return if (stream.seek().type in tt) {
             stream.seek().also { stream.advance() }
@@ -373,7 +374,7 @@ class Parser private constructor(val stream: TokenStream) {
                             Precedence.PRETTY_HIGH
                         )
                     } else if (stream.isNext(TokenType.DOT)) {
-                        return MemberAccess(e, parseMemberAccessor(stream))
+                        return parseMemberAccess(e, stream)
                     } else return e
                 }
             }
@@ -387,10 +388,7 @@ class Parser private constructor(val stream: TokenStream) {
                     when (val t = stream.seek().type) {
                         TokenType.DOT -> {
                             stream.advance()
-                            return MemberAccess(
-                                e,
-                                parseMemberAccessor(stream),
-                            )
+                            return parseMemberAccess(e, stream)
                         }
 
                         TokenType.MINUS, TokenType.PLUS -> {
@@ -468,24 +466,36 @@ class Parser private constructor(val stream: TokenStream) {
                 }
             }
 
-            private fun parseMemberAccessor(stream: TokenStream): Expression {
-                val e: Expression
+            private fun parseMemberAccess(base: Expression, stream: TokenStream): MemberAccess {
+                var access: MemberAccess? = null
+                var firstRound = true
 
-                if (stream.isNext(TokenType.IDENTIFIER)) {
-                    val t = acceptToken(TokenType.IDENTIFIER)
-                    e = if (stream.isNext(TokenType.LPAREN)) {
-                        val args = mutableListOf<Argument>()
-                        acceptToken(TokenType.LPAREN)
-                        args.addAll(parseArgumentList())
-                        acceptToken(TokenType.RPAREN)
-                        FunctionCall(t.lexeme!!, t.toContext(), context, args)
-                    } else VariableReference(t)
-                } else {
-                    cancel("unexpected token '${stream.seek().type}', expected function call or member variable")
-                    e = null!!
-                }
+                do {
+                    val e: Expression = if (stream.isNext(TokenType.IDENTIFIER)) {
+                        val t = acceptToken(TokenType.IDENTIFIER)
+                        if (stream.isNext(TokenType.LPAREN)) {
+                            val args = mutableListOf<Argument>()
+                            acceptToken(TokenType.LPAREN)
+                            args.addAll(parseArgumentList())
+                            acceptToken(TokenType.RPAREN)
+                            FunctionCall(t.lexeme!!, t.toContext(), context, args)
+                        } else {
+                            VariableReference(t)
+                        }
+                    } else {
+                        cancel("unexpected token '${stream.seek().type}', expected function call or member variable")
+                        null!!
+                    }
 
-                return e
+                    if (firstRound) {
+                        access = MemberAccess(base, e)
+                    } else access!!.accessor = MemberAccess(access.accessor, e)
+
+                    firstRound = false
+
+                } while (stream.acceptIfNext(TokenType.DOT))
+
+                return access!!
             }
 
             private fun parseFactor(stream: TokenStream): Expression {
@@ -523,7 +533,7 @@ class Parser private constructor(val stream: TokenStream) {
             }
 
             private fun parseValue(stream: TokenStream): Expression {
-                val e: Expression
+                var e: Expression
                 initContexts(pushFirst = true)
 
                 when {
@@ -539,8 +549,10 @@ class Parser private constructor(val stream: TokenStream) {
                         TokenType.NO,
                         TokenType.NOTHING
                     ) -> {
-                        e = Literal(stream.seek())
-                        stream.advance()
+                        e = Literal(stream.next())
+                        if (stream.acceptIfNext(TokenType.DOT)) {
+                            e = parseMemberAccess(e, stream)
+                        }
                     }
 
                     stream.acceptIfNext(TokenType.NEW) -> {
@@ -598,8 +610,11 @@ class Parser private constructor(val stream: TokenStream) {
                 if (stream.isNext(TokenType.IDENTIFIER)) {
                     name = acceptToken(TokenType.IDENTIFIER).lexeme
                     if (stream.isNext(TokenType.COLON)) stream.advance()
-                    else { stream.position--; name = null }
+                    else {
+                        stream.position--; name = null
+                    }
                 }
+                //if (stream.isNext(TokenType.DOT)) stream.position--
 
                 val expr = parseExpression()
                 return Argument(expr, name)

@@ -37,7 +37,7 @@ abstract class Node(val start: Lexer.Context, val end: Lexer.Context) : Iterable
             val start = children[0].start
             val end = children[children.indices.last].end
             return object : Node(start, end) {
-                override fun <T> accept(visitor: NodeVisitor<T>): T = visitor.visitRoot(this)
+                override fun <T> accept(visitor: NodeVisitor<T>): T = visitor.visitNode(this)
             }.also { node -> children.forEach { node.addChild(it) } }
         }
     }

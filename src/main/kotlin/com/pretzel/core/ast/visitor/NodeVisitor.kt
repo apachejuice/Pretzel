@@ -33,7 +33,6 @@ import com.pretzel.core.ast.VariableCreation
 import com.pretzel.core.ast.VariableReference
 
 interface NodeVisitor<T> {
-    fun visitRoot(node: Node): T
     fun visitUseStmt(useStmt: UseStmt): T
     fun visitExpression(expression: Expression): T
     fun visitBinaryExpression(binaryExpression: BinaryExpression): T
@@ -48,4 +47,5 @@ interface NodeVisitor<T> {
     fun visitVariableAssignment(variableAssignment: VariableAssignment): T
     fun visitMemberAccess(memberAccess: MemberAccess): T
     fun visitVariableReference(variableReference: VariableReference): T
+    fun visitNode(node: Node): T
 }

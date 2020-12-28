@@ -19,7 +19,12 @@ package com.pretzel.core.ast
 import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
-class VariableAssignment(val name: String, val newValue: Expression, start: Lexer.Context, end: Lexer.Context) : Node(start, end) {
+class VariableAssignment(
+    val name: String,
+    val newValue: Expression,
+    start: Lexer.Context,
+    end: Lexer.Context,
+) : Node(start, end) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visitVariableAssignment(this)
     }

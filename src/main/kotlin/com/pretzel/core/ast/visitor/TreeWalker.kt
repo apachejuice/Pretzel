@@ -14,17 +14,11 @@
  * limitations under the License.
  */
 
-package com.pretzel.core.ast
+package com.pretzel.core.ast.visitor
 
-import com.pretzel.core.ast.visitor.NodeVisitor
-import com.pretzel.core.lexer.Lexer
+import com.pretzel.core.ast.Node
 
-class ObjectCreation(val name: String, val args: List<Argument>, start: Lexer.Context, end: Lexer.Context) : Expression(start, end, Precedence.VERY_HIGH) {
-    override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitObjectCreation(this)
-    }
-
-    override fun toString(): String {
-        return "new $name(${args.joinToString(separator = ",") { it -> "$it" }})"
-    }
+interface TreeWalker<T> {
+    val visitor: NodeVisitor<T>
+    fun walk(node: Node): T
 }

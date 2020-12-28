@@ -18,7 +18,7 @@ package com.pretzel.core.ast
 
 import com.pretzel.core.ast.visitor.NodeVisitor
 
-class MemberAccess(val from: Expression, val accessor: Expression) :
+class MemberAccess(val from: Expression, var accessor: Expression) :
     Expression(from.start, accessor.end, Precedence.LOWEST) {
 
     override fun toString(): String {
