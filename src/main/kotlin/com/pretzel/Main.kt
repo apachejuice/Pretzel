@@ -19,6 +19,10 @@ package com.pretzel
 import com.pretzel.core.ErrorType
 import com.pretzel.core.Report
 import com.pretzel.core.ast.Node
+import com.pretzel.core.ast.interpreter.Interpreter
+import com.pretzel.core.ast.visitor.DefaultTreeWalker
+import com.pretzel.core.ast.visitor.NodeVisitor
+import com.pretzel.core.ast.visitor.TreeWalker
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
 import com.pretzel.core.parser.Parser
@@ -78,6 +82,18 @@ class Main {
             val scanner = Scanner(System.`in`)
             println("Welcome to the Pretzel REPL v0.1. Type \"// exit\" to exit.")
 
+            val nv = Interpreter()
+            val tw = object : TreeWalker<Unit> {
+                override val visitor: NodeVisitor<Unit>
+                    get() = nv
+
+                override fun walk(node: Node) {
+                    if (!node.hasChildren) visitor.visitNode(node)
+                    else node.forEach { walk(it) }
+                }
+
+            }
+
             while (true) {
                 try {
                     print(">>> ")
@@ -95,7 +111,9 @@ class Main {
                             p = Parser.fromLexer(l)
                             p.cancellationHook = { s: String, token: Lexer.Token, list: List<Node> -> Report.error(ErrorType.PARSER, s, token) }
                             val t2 = System.currentTimeMillis()
-                            p.parse()
+                            val node = p.parse()
+
+                            tw.walk(node!!)
                             parsetime = (System.currentTimeMillis() - t2).toString()
                         }
                     }

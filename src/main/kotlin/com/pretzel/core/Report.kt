@@ -17,13 +17,12 @@
 package com.pretzel.core
 
 import com.pretzel.core.lexer.Lexer
-import org.jetbrains.annotations.Contract
+import org.fusesource.jansi.Ansi
 
 
 class Report {
     companion object {
         var debug: Boolean = false
-        @Contract("_, _, _, false -> halt")
         fun error(errorType: ErrorType, message: String, faultyToken: Lexer.Token, overEOF: Boolean = false) {
             val msg = """
                 |A ${errorType.format} occurred at ${faultyToken.toContext()}
@@ -40,6 +39,12 @@ class Report {
         private fun prettyPrintStackTrace(trace: Array<StackTraceElement>, prefix: String = "    ") {
             for (i in trace)
                 println("$prefix$i")
+        }
+
+        fun warning(errorType: ErrorType, message: String, fault: Lexer.Context) {
+            val msg = "WARNING[$errorType, file '${fault.file}' at ${fault.line}:${fault.column}]: $message"
+            println(Ansi.ansi().fg(Ansi.Color.MAGENTA).a(msg).reset())
+            if (debug) prettyPrintStackTrace(Throwable().stackTrace)
         }
     }
 }
