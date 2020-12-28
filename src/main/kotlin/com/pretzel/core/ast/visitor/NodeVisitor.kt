@@ -18,8 +18,11 @@ package com.pretzel.core.ast.visitor
 
 import com.pretzel.core.ast.Argument
 import com.pretzel.core.ast.BinaryExpression
+import com.pretzel.core.ast.Block
+import com.pretzel.core.ast.EmptyStatement
 import com.pretzel.core.ast.Expression
 import com.pretzel.core.ast.FunctionCall
+import com.pretzel.core.ast.IfStatement
 import com.pretzel.core.ast.Literal
 import com.pretzel.core.ast.MemberAccess
 import com.pretzel.core.ast.ModStmt
@@ -48,4 +51,7 @@ interface NodeVisitor<T> {
     fun visitMemberAccess(memberAccess: MemberAccess): T
     fun visitVariableReference(variableReference: VariableReference): T
     fun visitNode(node: Node): T
+    fun visitIfStatement(ifStatement: IfStatement): T
+    fun visitBlock(block: Block): T
+    fun visitEmptyStatement(emptyStatement: EmptyStatement): T
 }
