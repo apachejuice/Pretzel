@@ -48,11 +48,11 @@ class DefaultNodeVisitor : NodeVisitor<String> {
     }
 
     override fun visitBinaryExpression(binaryExpression: BinaryExpression): String {
-        return "${binaryExpression.left} ${binaryExpression.operator.operator} ${binaryExpression.right}"
+        return "${visitExpression(binaryExpression.left)} ${binaryExpression.operator.operator} ${visitExpression(binaryExpression.right)}"
     }
 
     override fun visitUnaryExpression(unaryExpression: UnaryExpression): String {
-        return "${unaryExpression.operator?.operator ?: ""} ${unaryExpression.target}"
+        return "${unaryExpression.operator?.operator ?: ""}${visitExpression(unaryExpression.target)}"
     }
 
     override fun visitLiteral(literal: Literal): String {
@@ -61,7 +61,7 @@ class DefaultNodeVisitor : NodeVisitor<String> {
 
     override fun visitFunctionCall(functionCall: FunctionCall): String {
         val args = if (functionCall.args.isEmpty()) ""
-        else functionCall.args.joinToString(separator = ", ") { "$it" }
+        else functionCall.args.joinToString(separator = ", ") { visitArgument(it) }
         return "${functionCall.name} ($args)"
     }
 
@@ -74,7 +74,7 @@ class DefaultNodeVisitor : NodeVisitor<String> {
     override fun visitObjectCreation(objectCreation: ObjectCreation): String {
         val result = StringBuilder("new ")
         val args = if (objectCreation.args.isEmpty()) ""
-        else objectCreation.args.joinToString(separator = ", ") { "$it" }
+        else objectCreation.args.joinToString(separator = ", ") { visitArgument(it) }
         result.append("${objectCreation.name} ($args)")
         return result.toString()
     }
@@ -84,20 +84,20 @@ class DefaultNodeVisitor : NodeVisitor<String> {
     }
 
     override fun visiParenthesizedExpression(parsenthesizedExpression: ParsenthesizedExpression): String {
-        return "(${parsenthesizedExpression.expression})"
+        return "(${visitExpression(parsenthesizedExpression.expression)})"
     }
 
     override fun visitVariableCreation(variableCreation: VariableCreation): String {
         return "$${variableCreation.name}" + if (variableCreation.initializer != null)
-            " = ${variableCreation.initializer}" else ""
+            " = ${visitExpression(variableCreation.initializer)}" else ""
     }
 
     override fun visitVariableAssignment(variableAssignment: VariableAssignment): String {
-        return "$variableAssignment.name = ${variableAssignment.newValue}"
+        return "$variableAssignment.name = ${visitExpression(variableAssignment.newValue)}"
     }
 
     override fun visitMemberAccess(memberAccess: MemberAccess): String {
-        return "${memberAccess.from}.${memberAccess.accessor}"
+        return "${visitExpression(memberAccess.from)}.${visitExpression(memberAccess.accessor)}"
     }
 
     override fun visitVariableReference(variableReference: VariableReference): String {
@@ -113,7 +113,7 @@ class DefaultNodeVisitor : NodeVisitor<String> {
     }
 
     override fun visitBlock(block: Block): String {
-        return "{${block.nodes.joinToString(separator = "\n") { "$it" }}}"
+        return "{${block.nodes.joinToString(separator = "\n") { visitNode(it) }}}"
     }
 
     override fun visitEmptyStatement(emptyStatement: EmptyStatement): String {

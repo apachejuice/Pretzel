@@ -14,19 +14,28 @@
  * limitations under the License.
  */
 
-package com.pretzel.core.ast
+package com.pretzel.core.ast.interpreter
 
-import com.pretzel.core.ast.visitor.NodeVisitor
-import com.pretzel.core.lexer.Lexer
+class Scope(private var parent: Scope? = null) {
+    private val vars: MutableMap<String, Any> = HashMap()
+    private val children: MutableList<Scope> = ArrayList()
 
-class UseStmt(target: List<String>, start: Lexer.Context, end: Lexer.Context, val isWildcard: Boolean = false) : Node(start, end) {
-    val target: String = target.joinToString(separator = ":") { it } + if (isWildcard) ":*" else ""
+    fun createChild() = Scope(this)
 
-    override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitUseStmt(this)
+    fun addChild(s: Scope) {
+        s.parent = this
+        children.add(s)
     }
 
-    override fun toString(): String {
-        return "use $target"
+    fun copy(s: Scope, childForThis: Boolean = false): Scope {
+        val new = if (childForThis) createChild() else Scope()
+        new.vars.putAll(s.vars)
+        return s
+    }
+
+    operator fun get(id: String) = vars[id]
+
+    init {
+        if (parent != null) this.vars.putAll(parent!!.vars)
     }
 }

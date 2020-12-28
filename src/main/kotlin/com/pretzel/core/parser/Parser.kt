@@ -17,6 +17,8 @@
 package com.pretzel.core.parser
 
 
+import com.pretzel.core.ErrorType
+import com.pretzel.core.Report
 import com.pretzel.core.ast.Argument
 import com.pretzel.core.ast.BinaryExpression
 import com.pretzel.core.ast.Block
@@ -87,6 +89,8 @@ class Parser private constructor(val stream: TokenStream) {
         return result
     }
 
+    private fun warning(message: String) = Report.warning(ErrorType.PARSER, message, stream.seek().toContext())
+
     private fun acceptToken(vararg tt: TokenType, missing: Boolean = false): Token {
         return if (stream.seek().type in tt) {
             stream.seek().also { stream.advance() }
@@ -144,6 +148,8 @@ class Parser private constructor(val stream: TokenStream) {
         initContexts(pushFirst = true)
         acceptToken(TokenType.IF)
         pushContext()
+        if (!stream.isNext(TokenType.LPAREN))
+            warning("parentheses recommended around if condition for clean syntax")
         val condition = parseExpression(stream)
         acceptToken(TokenType.LBRACE)
         val body = ifBlock()
@@ -163,8 +169,10 @@ class Parser private constructor(val stream: TokenStream) {
         while (true) {
             when (stream.seek().type) {
                 TokenType.RBRACE -> {
-                    if (count == 0) return Block.empty(getStart())
-                    else break
+                    if (count == 0) {
+                        stream.advance()
+                        return Block.empty(getStart())
+                    } else break
                 }
 
                 TokenType.VAR -> nodes.add(parseVariable())
@@ -310,6 +318,7 @@ class Parser private constructor(val stream: TokenStream) {
             while (true) {
                 if (stream.isNext(TokenType.MUL)) {
                     wildcard = true
+                    stream.advance()
                     break
                 }
 
@@ -317,7 +326,7 @@ class Parser private constructor(val stream: TokenStream) {
                 if (!stream.isNext(TokenType.COLON)) break
                 else acceptToken(TokenType.COLON)
             }
-        } else if (stream.isNext(TokenType.MUL)) wildcard = true
+        }
 
         return result.toString() to wildcard
     }
