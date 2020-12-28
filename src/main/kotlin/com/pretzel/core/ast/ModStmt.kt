@@ -16,6 +16,7 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 class ModStmt(target: List<String>, start: Lexer.Context, end: Lexer.Context) : Node(start, end) {

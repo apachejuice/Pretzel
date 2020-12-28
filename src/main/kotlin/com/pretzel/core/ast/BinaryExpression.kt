@@ -16,6 +16,7 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.parser.Parser
 
 class BinaryExpression(

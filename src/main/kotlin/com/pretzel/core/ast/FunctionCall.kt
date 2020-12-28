@@ -16,6 +16,7 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 class FunctionCall(val name: String, start: Lexer.Context, end: Lexer.Context, val args: List<Argument>? = null) : Expression(start, end, Precedence.EXTREMELY_HIGH) {

@@ -80,7 +80,7 @@ class Main {
                     if (input.trim().startsWith("//") && "exit" in input)
                         exitProcess(0)
                     l = Lexer(input, Lexer.SourceMode.DIRECT)
-                    l.cancellationHook = { s: String, t: Lexer.Token -> Report.error(ErrorType.LEXER, s, t, false) }
+                    l.cancellationHook = { s: String, t: Lexer.Token -> Report.error(ErrorType.LEXER, s, t) }
                     val t = System.currentTimeMillis()
                     ts = TokenStream.open(l)
                     val lextime = System.currentTimeMillis() - t
@@ -88,7 +88,7 @@ class Main {
                     if (ts.length != 0) {
                         if (!l.hadError) {
                             p = Parser.fromLexer(l)
-                            p.cancellationHook = { s: String, token: Lexer.Token, list: List<Node> -> Report.error(ErrorType.PARSER, s, token, p.overEOF) }
+                            p.cancellationHook = { s: String, token: Lexer.Token, list: List<Node> -> Report.error(ErrorType.PARSER, s, token) }
                             val t2 = System.currentTimeMillis()
                             p.parse()
                             parsetime = (System.currentTimeMillis() - t2).toString()

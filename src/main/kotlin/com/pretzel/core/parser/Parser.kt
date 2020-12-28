@@ -48,7 +48,6 @@ class Parser private constructor(val stream: TokenStream) {
     open class ParsingException(val last: Token, val nodes: MutableList<Node>, val overEOF: Boolean = false) : RuntimeException()
 
     private var hadError: Boolean = false
-    var overEOF: Boolean = false
     private val contextStack: Stack<Context> = Stack()
     private val nodeCache: Stack<Node> = Stack()
     private val nodes = mutableListOf<Node>()
@@ -60,7 +59,7 @@ class Parser private constructor(val stream: TokenStream) {
 
     private fun cancel(message: String = "") {
         cancellationHook.invoke(message, stream.seek(), nodes)
-        throw ParsingException(stream.seek(), nodes, overEOF)
+        throw ParsingException(stream.seek(), nodes)
     }
 
     private val context: Context
@@ -89,11 +88,9 @@ class Parser private constructor(val stream: TokenStream) {
         return if (stream.seek().type in tt) {
             stream.seek().also { stream.advance() }
         } else {
-            overEOF = true
             cancel(
-                "expected one of '${tt.joinToString(separator = " ,") { "$it" }}', got '${if (missing) "EOF" else stream.seek()}'",
+                "expected one of '${tt.joinToString(separator = " ,") { "$it" }}', got '${stream.seek().type}'",
             )
-            overEOF = false
             if (stream.hasNext()) stream.next() else stream.seek()
         }
     }
@@ -127,7 +124,7 @@ class Parser private constructor(val stream: TokenStream) {
                 else -> pushNodeUnlessError(parseExpression(stream))
             }
 
-            acceptToken(TokenType.SEMI, missing = true)
+            stream.acceptIfNext(TokenType.EOF)
             checkAndPushNode()
         }
 
@@ -375,6 +372,8 @@ class Parser private constructor(val stream: TokenStream) {
                             op,
                             Precedence.PRETTY_HIGH
                         )
+                    } else if (stream.isNext(TokenType.DOT)) {
+                        return MemberAccess(e, parseMemberAccessor(stream))
                     } else return e
                 }
             }
@@ -534,6 +533,8 @@ class Parser private constructor(val stream: TokenStream) {
                         TokenType.SHORT_LITERAL,
                         TokenType.HEX_LITERAL,
                         TokenType.LONG_LITERAL,
+                        TokenType.STRING_LITERAL,
+                        TokenType.TEMPLATE_STRING,
                         TokenType.YES,
                         TokenType.NO,
                         TokenType.NOTHING
@@ -565,7 +566,7 @@ class Parser private constructor(val stream: TokenStream) {
                     }
 
                     else -> {
-                        cancel("unexpected token '${if (stream.hasNext()) stream.seek().type else "EOF".also { overEOF = true }}', expected expression or value")
+                        cancel("unexpected token '${if (stream.hasNext()) stream.seek().type else "EOF"}', expected expression or value")
                         e = null!!
                         stream.advance()
                     }
@@ -597,6 +598,7 @@ class Parser private constructor(val stream: TokenStream) {
                 if (stream.isNext(TokenType.IDENTIFIER)) {
                     name = acceptToken(TokenType.IDENTIFIER).lexeme
                     if (stream.isNext(TokenType.COLON)) stream.advance()
+                    else { stream.position--; name = null }
                 }
 
                 val expr = parseExpression()

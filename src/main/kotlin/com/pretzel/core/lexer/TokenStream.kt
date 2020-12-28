@@ -20,13 +20,12 @@ import com.pretzel.core.ErrorType.PARSER
 import com.pretzel.core.Report
 
 import java.lang.IndexOutOfBoundsException
-import java.lang.RuntimeException
+import java.util.Collections
 import java.util.Objects
 import java.util.Spliterator
 import java.util.function.Consumer
 
 class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
-    private var noTail: Boolean = false
     val tokens: MutableList<Lexer.Token>
         get() = _tokens
 
@@ -261,13 +260,25 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         }
 
         fun fromTokens(tokens: MutableList<Lexer.Token>): TokenStream {
-            return TokenStream(tokens).also { it.noTail = true }
+            return TokenStream(tokens)
         }
     }
 
     init {
-        if (!noTail) tokens.removeAt(tokens.size - 1)
         this._tokens = tokens
+        if (tokens.isNotEmpty()) {
+            val last = tokens.last()
+            _tokens.add(
+                Lexer.Token(
+                    "",
+                    Lexer.TokenType.EOF,
+                    last.line,
+                    last.column + 1,
+                    last.file,
+                    last.lineContent
+                )
+            )
+        }
         idx = 0
     }
 }

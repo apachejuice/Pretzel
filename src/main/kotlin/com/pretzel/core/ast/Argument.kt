@@ -16,6 +16,8 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
+
 class Argument(val e: Expression, val name: String? = null) : Node(e.start, e.end) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visitArgument(this)

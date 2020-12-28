@@ -16,6 +16,7 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 class VariableReference(val token: Lexer.Token) : Literal(token) {

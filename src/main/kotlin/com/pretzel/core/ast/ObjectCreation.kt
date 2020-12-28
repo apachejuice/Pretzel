@@ -16,6 +16,7 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 class ObjectCreation(val name: String, val args: List<Argument>? = null, start: Lexer.Context, end: Lexer.Context) : Expression(start, end, Precedence.VERY_HIGH) {

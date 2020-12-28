@@ -16,6 +16,8 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
+
 class MemberAccess(val from: Expression, val accessor: Expression) :
     Expression(from.start, accessor.end, Precedence.LOWEST) {
 

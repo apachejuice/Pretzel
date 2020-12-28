@@ -16,6 +16,7 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 class UseStmt(target: List<String>, start: Lexer.Context, end: Lexer.Context, val isWildcard: Boolean = false) : Node(start, end) {

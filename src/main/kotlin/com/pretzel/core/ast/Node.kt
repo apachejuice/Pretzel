@@ -16,6 +16,7 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 abstract class Node(val start: Lexer.Context, val end: Lexer.Context) : Iterable<Node> {

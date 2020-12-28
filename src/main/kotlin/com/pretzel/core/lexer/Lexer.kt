@@ -102,6 +102,7 @@ class Lexer(_source: String, mode: SourceMode) {
         LSHIFT,
         QUOTE,
         SEMI,
+        EOF,
         // no token
         INVALID,
     }
@@ -699,6 +700,6 @@ class Lexer(_source: String, mode: SourceMode) {
 
     fun getAllTokens() {
         while (!isAtEnd()) getNextToken()
-        tokens.push(Token.Companion.NullToken(filename))
+        //tokens.push(Token.Companion.NullToken(filename))
     }
 }

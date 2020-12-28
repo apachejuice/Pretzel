@@ -16,6 +16,7 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 open class Expression(start: Lexer.Context, end: Lexer.Context, val precedence: Precedence) : Node(start, end) {

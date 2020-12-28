@@ -14,7 +14,23 @@
  * limitations under the License.
  */
 
-package com.pretzel.core.ast
+package com.pretzel.core.ast.visitor
+
+import com.pretzel.core.ast.Argument
+import com.pretzel.core.ast.BinaryExpression
+import com.pretzel.core.ast.Expression
+import com.pretzel.core.ast.FunctionCall
+import com.pretzel.core.ast.Literal
+import com.pretzel.core.ast.MemberAccess
+import com.pretzel.core.ast.ModStmt
+import com.pretzel.core.ast.Node
+import com.pretzel.core.ast.ObjectCreation
+import com.pretzel.core.ast.ParsenthesizedExpression
+import com.pretzel.core.ast.UnaryExpression
+import com.pretzel.core.ast.UseStmt
+import com.pretzel.core.ast.VariableAssignment
+import com.pretzel.core.ast.VariableCreation
+import com.pretzel.core.ast.VariableReference
 
 interface NodeVisitor<T> {
     fun visitRoot(node: Node): T

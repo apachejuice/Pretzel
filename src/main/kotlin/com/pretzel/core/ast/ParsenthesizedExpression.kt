@@ -16,6 +16,8 @@
 
 package com.pretzel.core.ast
 
+import com.pretzel.core.ast.visitor.NodeVisitor
+
 class ParsenthesizedExpression(val expression: Expression) : Expression(expression.start, expression.end, Precedence.HIGHEST) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visiParenthesizedExpression(this)
