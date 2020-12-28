@@ -18,8 +18,11 @@ package com.pretzel.core.ast.visitor
 
 import com.pretzel.core.ast.Argument
 import com.pretzel.core.ast.BinaryExpression
+import com.pretzel.core.ast.Block
+import com.pretzel.core.ast.EmptyStatement
 import com.pretzel.core.ast.Expression
 import com.pretzel.core.ast.FunctionCall
+import com.pretzel.core.ast.IfStatement
 import com.pretzel.core.ast.Literal
 import com.pretzel.core.ast.MemberAccess
 import com.pretzel.core.ast.ModStmt
@@ -103,5 +106,17 @@ class DefaultNodeVisitor : NodeVisitor<String> {
 
     override fun visitNode(node: Node): String {
         return node.accept(this)
+    }
+
+    override fun visitIfStatement(ifStatement: IfStatement): String {
+        return ifStatement.toString()
+    }
+
+    override fun visitBlock(block: Block): String {
+        return "{${block.nodes.joinToString(separator = "\n") { "$it" }}}"
+    }
+
+    override fun visitEmptyStatement(emptyStatement: EmptyStatement): String {
+        return "/* empty */"
     }
 }

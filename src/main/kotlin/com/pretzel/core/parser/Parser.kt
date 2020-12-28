@@ -19,8 +19,10 @@ package com.pretzel.core.parser
 
 import com.pretzel.core.ast.Argument
 import com.pretzel.core.ast.BinaryExpression
+import com.pretzel.core.ast.Block
 import com.pretzel.core.ast.Expression
 import com.pretzel.core.ast.FunctionCall
+import com.pretzel.core.ast.IfStatement
 import com.pretzel.core.ast.Literal
 import com.pretzel.core.ast.MemberAccess
 import com.pretzel.core.ast.ModStmt
@@ -117,14 +119,16 @@ class Parser private constructor(val stream: TokenStream) {
     // The base parsing method; the root of the tree.
     fun parse(): Node? {
         while (stream.hasNext() && !hadError) {
-            when (stream.seek().type) {
+            val node = when (stream.seek().type) {
                 TokenType.USE -> parseUseStmt()
                 TokenType.MOD -> parseModuleStmt()
                 TokenType.VAR -> parseVariable()
                 TokenType.IDENTIFIER -> parseAssignment()
-                else -> pushNodeUnlessError(parseExpression(stream))
+                TokenType.IF -> parseIfStatement()
+                else -> parseExpression(stream)
             }
 
+            pushNodeUnlessError(node)
             stream.acceptIfNext(TokenType.EOF)
             checkAndPushNode()
         }
@@ -136,22 +140,61 @@ class Parser private constructor(val stream: TokenStream) {
             Node.getRootInstance(nodes)
     }
 
-    private fun parseAssignment() {
+    private fun parseIfStatement(): IfStatement {
+        initContexts(pushFirst = true)
+        acceptToken(TokenType.IF)
+        pushContext()
+        val condition = parseExpression(stream)
+        acceptToken(TokenType.LBRACE)
+        val body = ifBlock()
+        val elsebody: Block = if (stream.acceptIfNext(TokenType.ELSE)) { acceptToken(TokenType.LBRACE); ifBlock() } else Block.empty(getEnd())
+
+        return IfStatement(
+            condition,
+            body,
+            elsebody,
+        )
+    }
+
+    private fun ifBlock(): Block {
+        var count = 0
+        val nodes = mutableListOf<Node>()
+
+        while (true) {
+            when (stream.seek().type) {
+                TokenType.RBRACE -> {
+                    if (count == 0) return Block.empty(getStart())
+                    else break
+                }
+
+                TokenType.VAR -> nodes.add(parseVariable())
+                TokenType.IDENTIFIER -> nodes.add(parseAssignment())
+                TokenType.IF -> nodes.add(parseIfStatement())
+                else -> nodes.add(parseExpression(stream))
+            }
+
+            count++
+        }
+
+        stream.advance()
+        return Block(nodes)
+    }
+
+    private fun parseAssignment(): Node {
         initContexts(pushFirst = true)
         val name = acceptToken(TokenType.IDENTIFIER)
         val isOp = stream.isNext(*ASSIGNMENT_OP)
 
         if (!isOp) {
             stream.position--
-            pushNodeUnlessError(parseExpression(stream))
-            return
+            return parseExpression(stream)
         } else {
             val op = stream.next().type
             if (op == TokenType.ASSIGN) {
                 pushContext()
-                pushNodeUnlessError(VariableAssignment(name.lexeme!!, parseExpression(stream), getStart(), getEnd()))
+                val result = VariableAssignment(name.lexeme!!, parseExpression(stream), getStart(), getEnd())
                 finishContexts()
-                return
+                return result
             } else {
                 val precedence: Precedence
                 val biop = when (op) {
@@ -208,8 +251,7 @@ class Parser private constructor(val stream: TokenStream) {
                 }
 
                 pushContext()
-                pushNodeUnlessError(
-                    VariableAssignment(
+                return VariableAssignment(
                         name.lexeme!!,
                         BinaryExpression(
                             VariableReference(name),
@@ -219,14 +261,12 @@ class Parser private constructor(val stream: TokenStream) {
                         ),
                         getStart(),
                         getEnd(),
-                    )
-                )
-                finishContexts()
+                    ).also { finishContexts() }
             }
         }
     }
 
-    private fun parseVariable() {
+    private fun parseVariable(): Node {
         initContexts(pushFirst = true)
         acceptToken(TokenType.VAR)
         val ntok = acceptToken(TokenType.IDENTIFIER)
@@ -235,12 +275,13 @@ class Parser private constructor(val stream: TokenStream) {
         // including other assignment operators
         // for more specific error messages
         val assign = stream.isNext(*ASSIGNMENT_OP)
+        val result: Node
 
         if (!assign) {
             pushContext()
-            pushNodeUnlessError(VariableCreation(name, null, getStart(), getEnd()))
+            result = VariableCreation(name, null, getStart(), getEnd())
             finishContexts()
-            return
+            return result
         }
 
         val tok = stream.seek()
@@ -250,19 +291,11 @@ class Parser private constructor(val stream: TokenStream) {
         if (op != TokenType.ASSIGN)
             cancel("cannot use expression-assignment operator '$lit' when creating new variables")
 
-        if (op == TokenType.ASSIGN) {
-            pushContext()
-            stream.advance()
-            pushNodeUnlessError(VariableCreation(name, parseExpression(stream), getStart(), getEnd()))
-            finishContexts()
-            return
-        } else if (op == TokenType.ASSIGN) {
-            pushContext()
-            stream.advance()
-            pushNodeUnlessError(VariableAssignment(name, parseExpression(stream), getStart(), getEnd()))
-            finishContexts()
-            return
-        }
+        pushContext()
+        stream.advance()
+        result = VariableCreation(name, parseExpression(stream), getStart(), getEnd())
+        finishContexts()
+        return result
     }
 
     //region STATEMENT PARSING
@@ -289,34 +322,30 @@ class Parser private constructor(val stream: TokenStream) {
         return result.toString() to wildcard
     }
 
-    private fun parseUseStmt() {
+    private fun parseUseStmt(): UseStmt {
         acceptToken(TokenType.USE)
         val result = parseModulePath()
 
         pushContext()
-        pushNodeUnlessError(
-            UseStmt(
+        return UseStmt(
                 result.first.split(":"),
                 getStart(),
                 getEnd(),
                 result.second,
             )
-        )
     }
 
-    private fun parseModuleStmt() {
+    private fun parseModuleStmt(): ModStmt {
         acceptToken(TokenType.MOD)
         val result = parseModulePath()
         if (result.second)
             cancel("mod statement cannot have wildcards")
 
         pushContext()
-        pushNodeUnlessError(
-            ModStmt(
+        return ModStmt(
                 result.first.split(":"),
                 getStart(),
                 getEnd(),
-            )
         )
     }
 
