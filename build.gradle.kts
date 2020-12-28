@@ -18,7 +18,6 @@ dependencies {
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.1")
     implementation("commons-cli:commons-cli:1.4")
-    testImplementation("junit", "junit", "4.12")
 }
 
 configure<JavaPluginConvention> {
@@ -41,6 +40,7 @@ tasks {
         kotlinOptions.jvmTarget = "1.8"
     }
 }
+
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.kotlinOptions {
     languageVersion = "1.4"

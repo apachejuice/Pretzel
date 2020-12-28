@@ -40,6 +40,11 @@ class Main {
     companion object {
         @JvmStatic
         fun main(vararg args: String) {
+            runRepl(*args)
+        }
+
+        @JvmStatic
+        fun runRepl(vararg args: String) {
             val debug = Option("d","debug", false, "Debug mode (show stack trace on errors)")
             debug.isRequired = false
             val options = Options()

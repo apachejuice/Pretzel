@@ -20,6 +20,9 @@ import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 abstract class Node(val start: Lexer.Context, val end: Lexer.Context) : Iterable<Node> {
+    val hasChildren: Boolean
+        get() = children.isNotEmpty()
+
     private val children: ArrayList<Node> = ArrayList()
     private val trace: ArrayList<Node> = ArrayList()
 
