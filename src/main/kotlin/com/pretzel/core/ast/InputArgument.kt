@@ -17,15 +17,22 @@
 package com.pretzel.core.ast
 
 import com.pretzel.core.ast.visitor.NodeVisitor
-import com.pretzel.core.parser.Parser
+import com.pretzel.core.lexer.Lexer
 
-class UnaryExpression(val target: Expression, val operator: Parser.UnaryOperator
-    ) : Expression(target.start, target.end, Precedence.SUPER_HIGH) {
+class InputArgument(
+    val name: Lexer.Token,
+    val type: Lexer.Token? = null,
+    val defaultValue: Expression? = null,
+    start: Lexer.Context,
+    end: Lexer.Context
+) : Node(start, end) {
+
     override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitUnaryExpression(this)
+        return visitor.visitInputArgument(this)
     }
 
     override fun toString(): String {
-        return "${operator.operator}$target"
+        println("value: $defaultValue")
+        return "${name.lexeme}${if (type == null) "" else ": ${type.lexeme}"}${if (defaultValue == null) "" else " = $defaultValue"}"
     }
 }

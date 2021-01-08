@@ -24,6 +24,8 @@ open class Literal(private val token: Lexer.Token) : Expression(token.toContext(
         return visitor.visitLiteral(this)
     }
 
+    val literal: String = token.lexeme
+
     override fun toString(): String = if (token.type == Lexer.TokenType.STRING_LITERAL) "\"${token.lexeme}\"" else token.lexeme ?: "null"
 
     val type: Lexer.TokenType

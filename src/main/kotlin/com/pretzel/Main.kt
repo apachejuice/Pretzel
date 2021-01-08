@@ -19,10 +19,6 @@ package com.pretzel
 import com.pretzel.core.ErrorType
 import com.pretzel.core.Report
 import com.pretzel.core.ast.Node
-import com.pretzel.core.ast.interpreter.Interpreter
-import com.pretzel.core.ast.visitor.DefaultTreeWalker
-import com.pretzel.core.ast.visitor.NodeVisitor
-import com.pretzel.core.ast.visitor.TreeWalker
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
 import com.pretzel.core.parser.Parser
@@ -49,9 +45,12 @@ class Main {
 
         @JvmStatic
         fun runRepl(vararg args: String) {
-            val debug = Option("d","debug", false, "Debug mode (show stack trace on errors)")
+            val debug = Option("d","debug", false, "Debug mode (show times and actions done)")
+            val trace = Option("t", "trace", false, "Show stack trace on errors")
             debug.isRequired = false
+            trace.isRequired = false
             val options = Options()
+            options.addOption(trace)
             options.addOption(debug)
             val parser = DefaultParser()
             val formatter = HelpFormatter()
@@ -73,7 +72,7 @@ class Main {
             }
 
             val isDebug = cmd.hasOption("debug")
-            Report.debug = isDebug
+            Report.debug = cmd.hasOption("trace")
 
             var l: Lexer
             var ts: TokenStream
@@ -82,18 +81,6 @@ class Main {
             val scanner = Scanner(System.`in`)
             println("Welcome to the Pretzel REPL v0.1. Type \"// exit\" to exit.")
 
-            val nv = Interpreter()
-            val tw = object : TreeWalker<Unit> {
-                override val visitor: NodeVisitor<Unit>
-                    get() = nv
-
-                override fun walk(node: Node) {
-                    if (!node.hasChildren) visitor.visitNode(node)
-                    else node.forEach { walk(it) }
-                }
-
-            }
-
             while (true) {
                 try {
                     print(">>> ")
@@ -101,28 +88,27 @@ class Main {
                     if (input.trim().startsWith("//") && "exit" in input)
                         exitProcess(0)
                     l = Lexer(input, Lexer.SourceMode.DIRECT)
-                    l.cancellationHook = { s: String, t: Lexer.Token -> Report.error(ErrorType.LEXER, s, t) }
-                    val t = System.currentTimeMillis()
+                    l.cancellationHook = { s: String, t: Lexer.Token -> Report.error(ErrorType.LEXER, s, t.toContext()) }
+                    var t = System.currentTimeMillis()
                     ts = TokenStream.open(l)
                     val lextime = System.currentTimeMillis() - t
-                    var parsetime = "(no parsing happened)"
+                    var parsetime = -1L
                     if (ts.length != 0) {
                         if (!l.hadError) {
                             p = Parser.fromLexer(l)
-                            p.cancellationHook = { s: String, token: Lexer.Token, list: List<Node> -> Report.error(ErrorType.PARSER, s, token) }
-                            val t2 = System.currentTimeMillis()
+                            p.cancellationHook = { s: String, token: Lexer.Token, list: List<Node> -> Report.error(ErrorType.PARSER, s, token.toContext()) }
+                            t = System.currentTimeMillis()
                             val node = p.parse()
-
-                            tw.walk(node!!)
-                            parsetime = (System.currentTimeMillis() - t2).toString()
+                            parsetime = System.currentTimeMillis() - t
+                            t = System.currentTimeMillis()
                         }
                     }
 
                     if (isDebug) {
+                        val total = lextime + parsetime
                         println("""
-                            Lexing time:          ${lextime}ms
-                            Parsing time:         ${parsetime}ms
-                            Total execution time: ${if (parsetime.startsWith("(")) parsetime else (parsetime.toLong() + lextime).toString() + "ms"}
+                            Lexing time(ms):          $lextime
+                            Parsing time(ms):         ${if (parsetime != -1L) parsetime else "(no parsing happened)"}
                             """.trimIndent()
                         )
                     }

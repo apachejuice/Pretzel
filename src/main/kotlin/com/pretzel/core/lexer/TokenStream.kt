@@ -20,7 +20,6 @@ import com.pretzel.core.ErrorType.PARSER
 import com.pretzel.core.Report
 
 import java.lang.IndexOutOfBoundsException
-import java.util.Collections
 import java.util.Objects
 import java.util.Spliterator
 import java.util.function.Consumer
@@ -59,7 +58,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             }
         }
 
-        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token, false)
+        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toContext(), false)
         return Lexer.Token.Companion.NullToken("")
     }
 
@@ -75,7 +74,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         for (s in applicant) {
             if (tt !== s) {
                 Report.error(
-                    PARSER, "expected symbol of type '$s', got '$tt'", token, false
+                    PARSER, "expected symbol of type '$s', got '$tt'", token.toContext(), false
                 )
             }
         }
@@ -210,7 +209,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
                 java.lang.String.format(
                     "expected identifier, got '%s'",
                     token.lexeme
-                ), token, false
+                ), token.toContext(), false
             )
         }
         return token

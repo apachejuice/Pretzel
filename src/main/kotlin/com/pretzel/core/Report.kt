@@ -23,13 +23,13 @@ import org.fusesource.jansi.Ansi
 class Report {
     companion object {
         var debug: Boolean = false
-        fun error(errorType: ErrorType, message: String, faultyToken: Lexer.Token, overEOF: Boolean = false) {
+        fun error(errorType: ErrorType, message: String, fault: Lexer.Context, overEOF: Boolean = false) {
             val msg = """
-                |A ${errorType.format} occurred at ${faultyToken.toContext()}
+                |A ${errorType.format} occurred at $fault
                 |Message: $message
-                |line ${faultyToken.line}:
-                | | ${faultyToken.lineContent}
-                |  ${" ".repeat(faultyToken.column + (if (overEOF) 1 else 0)) + "^"}
+                |line ${fault.line}:
+                | | ${fault.lineContent}
+                |  ${" ".repeat(fault.column + (if (overEOF) 1 else 0)) + "^"}
                 |${if (debug) "Stack trace:\n" else ""}
             """.trimMargin()
             print(msg)

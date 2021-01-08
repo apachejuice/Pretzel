@@ -22,13 +22,16 @@ import com.pretzel.core.ast.Block
 import com.pretzel.core.ast.EmptyStatement
 import com.pretzel.core.ast.Expression
 import com.pretzel.core.ast.FunctionCall
+import com.pretzel.core.ast.FunctionDeclaration
 import com.pretzel.core.ast.IfStatement
+import com.pretzel.core.ast.InputArgument
 import com.pretzel.core.ast.Literal
 import com.pretzel.core.ast.MemberAccess
 import com.pretzel.core.ast.ModStmt
 import com.pretzel.core.ast.Node
 import com.pretzel.core.ast.ObjectCreation
 import com.pretzel.core.ast.ParsenthesizedExpression
+import com.pretzel.core.ast.ReturnStatement
 import com.pretzel.core.ast.UnaryExpression
 import com.pretzel.core.ast.UseStmt
 import com.pretzel.core.ast.VariableAssignment
@@ -118,5 +121,17 @@ class DefaultNodeVisitor : NodeVisitor<String> {
 
     override fun visitEmptyStatement(emptyStatement: EmptyStatement): String {
         return "/* empty */"
+    }
+
+    override fun visitFunctionDeclaration(functionDeclaration: FunctionDeclaration): String {
+        TODO("Not yet implemented")
+    }
+
+    override fun visitInputArgument(inputArgument: InputArgument): String {
+        TODO("Not yet implemented")
+    }
+
+    override fun visitReturnStatement(returnStatement: ReturnStatement): String {
+        TODO("Not yet implemented")
     }
 }

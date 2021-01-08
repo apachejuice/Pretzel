@@ -24,7 +24,9 @@ import com.pretzel.core.ast.BinaryExpression
 import com.pretzel.core.ast.Block
 import com.pretzel.core.ast.Expression
 import com.pretzel.core.ast.FunctionCall
+import com.pretzel.core.ast.FunctionDeclaration
 import com.pretzel.core.ast.IfStatement
+import com.pretzel.core.ast.InputArgument
 import com.pretzel.core.ast.Literal
 import com.pretzel.core.ast.MemberAccess
 import com.pretzel.core.ast.ModStmt
@@ -129,6 +131,7 @@ class Parser private constructor(val stream: TokenStream) {
                 TokenType.VAR -> parseVariable()
                 TokenType.IDENTIFIER -> parseAssignment()
                 TokenType.IF -> parseIfStatement()
+                TokenType.FUNC -> parseFunctionDeclaration()
                 else -> parseExpression(stream)
             }
 
@@ -144,6 +147,71 @@ class Parser private constructor(val stream: TokenStream) {
             Node.getRootInstance(nodes)
     }
 
+    private fun parseFunctionDeclaration(): FunctionDeclaration {
+        val start = context
+        var type: Token? = null
+        acceptToken(TokenType.FUNC)
+        val name = acceptToken(TokenType.IDENTIFIER)
+        acceptToken(TokenType.LPAREN)
+        var args = listOf<InputArgument>()
+        if (stream.isNext(TokenType.RPAREN))
+            acceptToken(TokenType.RPAREN)
+        else {
+            args = argumentList()
+            acceptToken(TokenType.RPAREN)
+        }
+
+        initContexts(pushFirst = true)
+        if (stream.acceptIfNext(TokenType.ARROW))
+            type = acceptToken(TokenType.IDENTIFIER)
+        acceptToken(TokenType.LBRACE)
+        val body = block()
+
+        return FunctionDeclaration(
+            type,
+            name,
+            args,
+            body,
+            // we used different approach
+            start,
+            getStart()
+        )
+    }
+
+    private fun argumentList(): List<InputArgument> {
+        val result = mutableListOf<InputArgument>()
+        finishContexts()
+
+        do {
+            pushContext()
+            val name = acceptToken(TokenType.IDENTIFIER)
+            var type: Token? = null
+            var defaultValue: Expression? = null
+
+            if (stream.acceptIfNext(TokenType.COLON))
+                type = acceptToken(TokenType.IDENTIFIER)
+
+            if (stream.acceptIfNext(TokenType.ASSIGN))
+                defaultValue = parseExpression(stream)
+
+            pushContext()
+
+            result.add(
+                InputArgument(
+                    name,
+                    type,
+                    defaultValue,
+                    getStart(),
+                    getEnd(),
+                )
+            )
+
+            finishContexts()
+        } while (stream.acceptIfNext(TokenType.COMMA))
+
+        return result
+    }
+
     private fun parseIfStatement(): IfStatement {
         initContexts(pushFirst = true)
         acceptToken(TokenType.IF)
@@ -152,8 +220,8 @@ class Parser private constructor(val stream: TokenStream) {
             warning("parentheses recommended around if condition for clean syntax")
         val condition = parseExpression(stream)
         acceptToken(TokenType.LBRACE)
-        val body = ifBlock()
-        val elsebody: Block = if (stream.acceptIfNext(TokenType.ELSE)) { acceptToken(TokenType.LBRACE); ifBlock() } else Block.empty(context)
+        val body = block()
+        val elsebody: Block = if (stream.acceptIfNext(TokenType.ELSE)) { acceptToken(TokenType.LBRACE); block() } else Block.empty(context)
 
         return IfStatement(
             condition,
@@ -162,7 +230,7 @@ class Parser private constructor(val stream: TokenStream) {
         )
     }
 
-    private fun ifBlock(): Block {
+    private fun block(): Block {
         var count = 0
         val nodes = mutableListOf<Node>()
 
@@ -178,6 +246,7 @@ class Parser private constructor(val stream: TokenStream) {
                 TokenType.VAR -> nodes.add(parseVariable())
                 TokenType.IDENTIFIER -> nodes.add(parseAssignment())
                 TokenType.IF -> nodes.add(parseIfStatement())
+                TokenType.FUNC -> parseFunctionDeclaration()
                 else -> nodes.add(parseExpression(stream))
             }
 
@@ -200,7 +269,7 @@ class Parser private constructor(val stream: TokenStream) {
             val op = stream.next().type
             if (op == TokenType.ASSIGN) {
                 pushContext()
-                val result = VariableAssignment(name.lexeme!!, parseExpression(stream), getStart(), getEnd())
+                val result = VariableAssignment(name.lexeme, parseExpression(stream), getStart(), getEnd())
                 finishContexts()
                 return result
             } else {
@@ -260,7 +329,7 @@ class Parser private constructor(val stream: TokenStream) {
 
                 pushContext()
                 return VariableAssignment(
-                        name.lexeme!!,
+                        name.lexeme,
                         BinaryExpression(
                             VariableReference(name),
                             parseExpression(stream),
@@ -278,7 +347,7 @@ class Parser private constructor(val stream: TokenStream) {
         initContexts(pushFirst = true)
         acceptToken(TokenType.VAR)
         val ntok = acceptToken(TokenType.IDENTIFIER)
-        val name = ntok.lexeme!!
+        val name = ntok.lexeme
 
         // including other assignment operators
         // for more specific error messages
@@ -294,7 +363,7 @@ class Parser private constructor(val stream: TokenStream) {
 
         val tok = stream.seek()
         val op = tok.type
-        val lit = tok.lexeme!!
+        val lit = tok.lexeme
 
         if (op != TokenType.ASSIGN)
             cancel("cannot use expression-assignment operator '$lit' when creating new variables")
@@ -429,8 +498,19 @@ class Parser private constructor(val stream: TokenStream) {
                             return parseMemberAccess(e, stream)
                         }
 
-                        TokenType.MINUS, TokenType.PLUS -> {
-                            op = BinaryOperator.valueOf(t.name)
+                        TokenType.MINUS, TokenType.PLUS,
+                        TokenType.CONCAT_SPACE, TokenType.CONCAT_COMMA -> {
+                            op = when (t) {
+                                TokenType.MINUS, TokenType.PLUS -> BinaryOperator.valueOf(t.name)
+                                TokenType.CONCAT_COMMA -> BinaryOperator.STRCOMMA
+                                TokenType.CONCAT_SPACE -> BinaryOperator.STRSPACE
+
+                                else -> {
+                                    cancel("unexpected token ${stream.seek().type}")
+                                    BinaryOperator.UNKNOWN
+                                }
+                            }
+
                             p = Precedence.PRETTY_HIGH
                         }
 
@@ -516,7 +596,7 @@ class Parser private constructor(val stream: TokenStream) {
                             acceptToken(TokenType.LPAREN)
                             args.addAll(parseArgumentList())
                             acceptToken(TokenType.RPAREN)
-                            FunctionCall(t.lexeme!!, t.toContext(), context, args)
+                            FunctionCall(t.lexeme, t.toContext(), context, args)
                         } else {
                             VariableReference(t)
                         }
@@ -594,7 +674,7 @@ class Parser private constructor(val stream: TokenStream) {
                     }
 
                     stream.acceptIfNext(TokenType.NEW) -> {
-                        val name = acceptToken(TokenType.IDENTIFIER).lexeme!!
+                        val name = acceptToken(TokenType.IDENTIFIER).lexeme
                         val args = mutableListOf<Argument>()
                         acceptToken(TokenType.LPAREN)
                         args.addAll(parseArgumentList())
@@ -611,7 +691,7 @@ class Parser private constructor(val stream: TokenStream) {
                             acceptToken(TokenType.LPAREN)
                             args.addAll(parseArgumentList())
                             acceptToken(TokenType.RPAREN)
-                            FunctionCall(t.lexeme!!, t.toContext(), context, args)
+                            FunctionCall(t.lexeme, t.toContext(), context, args)
                         } else VariableReference(t)
                     }
 

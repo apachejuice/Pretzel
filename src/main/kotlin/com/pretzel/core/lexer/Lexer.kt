@@ -21,6 +21,28 @@ import java.util.Stack
 
 
 class Lexer(_source: String, mode: SourceMode) {
+    private enum class StringType {
+        SINGLE,
+        DOUBLE;
+
+        val quote: Char
+            get() {
+                return when (this) {
+                    DOUBLE -> '"'
+                    SINGLE -> '\''
+                }
+            }
+
+        companion object {
+            fun from(quote: Char): StringType = when (quote) {
+                '"' -> DOUBLE
+                '\'' -> SINGLE
+
+                else -> error(quote)
+            }
+        }
+    }
+
     enum class SourceMode {
         FILE,
         DIRECT,
@@ -41,6 +63,7 @@ class Lexer(_source: String, mode: SourceMode) {
         LSHIFTSET,
         BAND,
         ASSIGN,
+        ARROW,
         AT,
         BOOL,
         BREAK,
@@ -138,7 +161,7 @@ class Lexer(_source: String, mode: SourceMode) {
     }
 
     open class Token(
-        val lexeme: String?, val type: TokenType, val line: Int,
+        val lexeme: String, val type: TokenType, val line: Int,
         val column: Int, val file: String, val lineContent: String
     ) {
         companion object {
@@ -314,17 +337,17 @@ class Lexer(_source: String, mode: SourceMode) {
         }
     }
 
-    private fun string() {
+    private fun string(type: StringType) {
         val result = StringBuilder()
 
-        while (peek() != '"' && !isAtEnd()) {
+        while (peek() != type.quote && !isAtEnd()) {
             if (peek() == '\n') line++
             result.append(peek())
             shiftInLine()
         }
 
         if (isAtEnd()) {
-            pushToken(TokenType.QUOTE, "\"")
+            pushToken(TokenType.QUOTE, type.quote)
             cancel("unexpected EOF in string constant", tokens.lastElement())
             hadError = true
             return
@@ -334,9 +357,9 @@ class Lexer(_source: String, mode: SourceMode) {
         pushToken(TokenType.STRING_LITERAL, result.toString())
     }
 
-    private fun templateString() {
+    private fun templateString(type: StringType) {
         next()
-        string()
+        string(type)
 
         val template = tokens.pop()
         pushToken(TokenType.TEMPLATE_STRING, template.lexeme)
@@ -348,7 +371,12 @@ class Lexer(_source: String, mode: SourceMode) {
         if (ishex) {
             result.append("x")
             next()
-            while (peek().isDigit() || peek().toLowerCase() in "abcdef") result.append(next())
+            while (peek().isDigit() || peek().toLowerCase() in "abcdef") result.append(next().toUpperCase())
+            if (result.length != 1) {
+                pushToken(TokenType.INVALID, peek())
+                cancel("expected hex literal, got '${peek()}'", tokens.pop())
+            }
+
             if (!returnString) {
                 pushToken(TokenType.HEX_LITERAL, "0$result")
                 return null
@@ -401,7 +429,7 @@ class Lexer(_source: String, mode: SourceMode) {
         pushToken(type!!, result.toString())
     }
 
-    private fun pushToken(type: TokenType, literal: String? = null) =
+    private fun pushToken(type: TokenType, literal: String) =
         tokens.push(Token(literal, type, line, column - 1, filename, source.lines()[line - 1]))
 
     private fun pushToken(type: TokenType, literal: Char) = pushToken(type, "%c".format(literal))
@@ -422,8 +450,9 @@ class Lexer(_source: String, mode: SourceMode) {
             ';' -> pushToken(TokenType.SEMI, c)
 
             '@' -> {
-                if (match('"'))
-                    templateString()
+                val quote = peek()
+                if (match('"') || match('"'))
+                    templateString(StringType.from(quote))
                 else pushToken(TokenType.AT, c)
             }
 
@@ -457,6 +486,11 @@ class Lexer(_source: String, mode: SourceMode) {
             '-' -> {
                 val tok: String
                 val tt = when {
+                    match('>') -> {
+                        tok = "->"
+                        TokenType.ARROW
+                    }
+
                     match('=') -> {
                         tok = "-="
                         TokenType.MINUSSET
@@ -682,10 +716,10 @@ class Lexer(_source: String, mode: SourceMode) {
             }
 
             ' ', '\r' -> { /* ignore */ }
-
             '\t' -> shiftInLine()
             '\n' -> line++
-            '"', '\'' -> string()
+            '"' -> string(StringType.DOUBLE)
+            '\'' -> string(StringType.SINGLE)
             in '0'..'9' -> number(c, c == '0')
             else -> {
                 if (isAlpha(c)) identifier(c)

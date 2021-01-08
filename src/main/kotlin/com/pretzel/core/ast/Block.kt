@@ -20,6 +20,9 @@ import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
 class Block : Node {
+    val length: Int
+        get() = nodes.size
+
     val nodes: MutableList<Node> = ArrayList()
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visitBlock(this)

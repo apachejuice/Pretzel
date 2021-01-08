@@ -17,15 +17,13 @@
 package com.pretzel.core.ast
 
 import com.pretzel.core.ast.visitor.NodeVisitor
-import com.pretzel.core.parser.Parser
 
-class UnaryExpression(val target: Expression, val operator: Parser.UnaryOperator
-    ) : Expression(target.start, target.end, Precedence.SUPER_HIGH) {
+class ReturnStatement(val expr: Expression) : Node(expr.start, expr.end) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitUnaryExpression(this)
+        return visitor.visitReturnStatement(this)
     }
 
     override fun toString(): String {
-        return "${operator.operator}$target"
+        return "return $expr"
     }
 }
