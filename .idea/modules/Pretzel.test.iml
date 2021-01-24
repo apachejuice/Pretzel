@@ -45,18 +45,18 @@
   <component name="NewModuleRootManager">
     <output-test url="file://$MODULE_DIR$/../../build/classes/java/test" />
     <exclude-output />
+    <content url="file://$MODULE_DIR$/../../src/test/java" />
     <content url="file://$MODULE_DIR$/../../src/test/java">
       <sourceFolder url="file://$MODULE_DIR$/../../src/test/java" isTestSource="true" />
     </content>
-    <content url="file://$MODULE_DIR$/../../src/test/java" />
+    <content url="file://$MODULE_DIR$/../../src/test/kotlin" />
     <content url="file://$MODULE_DIR$/../../src/test/kotlin">
       <sourceFolder url="file://$MODULE_DIR$/../../src/test/kotlin" isTestSource="true" />
     </content>
-    <content url="file://$MODULE_DIR$/../../src/test/kotlin" />
+    <content url="file://$MODULE_DIR$/../../src/test/resources" />
     <content url="file://$MODULE_DIR$/../../src/test/resources">
       <sourceFolder url="file://$MODULE_DIR$/../../src/test/resources" type="java-test-resource" />
     </content>
-    <content url="file://$MODULE_DIR$/../../src/test/resources" />
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="Pretzel.main" />

@@ -85,7 +85,7 @@ class Main {
                 try {
                     print(">>> ")
                     input = scanner.nextLine()
-                    if (input.trim().startsWith("//") && "exit" in input)
+                    if (input.trim().startsWith("//") && input.trim().replace("//", "") == "exit")
                         exitProcess(0)
                     l = Lexer(input, Lexer.SourceMode.DIRECT)
                     l.cancellationHook = { s: String, t: Lexer.Token -> Report.error(ErrorType.LEXER, s, t.toContext()) }
