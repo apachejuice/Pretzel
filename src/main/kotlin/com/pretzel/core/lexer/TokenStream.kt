@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,8 @@
 package com.pretzel.core.lexer
 
 import com.pretzel.core.ErrorType.PARSER
-import com.pretzel.core.Report
+import com.pretzel.core.Reporter
+import com.pretzel.core.ConsoleReporter
 
 import java.lang.IndexOutOfBoundsException
 import java.util.Objects
@@ -25,6 +26,8 @@ import java.util.Spliterator
 import java.util.function.Consumer
 
 class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
+    private val reporter: Reporter = ConsoleReporter()
+
     val tokens: MutableList<Lexer.Token>
         get() = _tokens
 
@@ -34,7 +37,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
      * @return The lexer used by this Lexer.TokenStream
      */
     lateinit var lexer: Lexer
-    private lateinit var _tokens: MutableList<Lexer.Token>
+    private var _tokens: MutableList<Lexer.Token> = tokens
     private var idx: Int
     val length: Int
         get() = tokens.size
@@ -58,7 +61,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             }
         }
 
-        Report.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toContext(), false)
+        reporter.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toContext(), false)
         return Lexer.Token.Companion.NullToken("")
     }
 
@@ -73,7 +76,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         val tt = token.type
         for (s in applicant) {
             if (tt !== s) {
-                Report.error(
+                reporter.error(
                     PARSER, "expected symbol of type '$s', got '$tt'", token.toContext(), false
                 )
             }
@@ -90,7 +93,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
     fun acceptIfNext(vararg applicant: String): Boolean {
         val token = tokens[idx]
         for (s in applicant) {
-            if (token.`is`(s)) {
+            if (token.isType(s)) {
                 idx++
                 return true
             }
@@ -142,7 +145,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         if (!hasNext()) return false
         val token: Lexer.Token = tokens[idx]
         for (s in applicant) {
-            if (token.`is`(s)) {
+            if (token.isType(s)) {
                 return true
             }
         }
@@ -196,25 +199,6 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         return tokens[idx].lexeme
     }
 
-    /**
-     * Accepts the next token if it is a valid identifier.
-     *
-     * @return The accepted identifier;
-     */
-    fun acceptIdentifier(): Lexer.Token {
-        val token = tokens[idx++]
-        if (!token.lexeme!!.matches(Regex("[_a-zA-Z][_a-zA-Z0-9]+ | _+"))) {
-            Report.error(
-                PARSER,
-                java.lang.String.format(
-                    "expected identifier, got '%s'",
-                    token.lexeme
-                ), token.toContext(), false
-            )
-        }
-        return token
-    }
-
     override fun toString(): String {
         return "$tokens:$position"
     }
@@ -264,7 +248,6 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
     }
 
     init {
-        this._tokens = tokens
         if (tokens.isNotEmpty()) {
             val last = tokens.last()
             _tokens.add(

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,15 @@
 
 package com.pretzel.core.lexer
 
+import com.pretzel.core.ConsoleReporter
+import com.pretzel.core.ErrorType
+import com.pretzel.core.Reporter
+
 import java.io.File
 import java.util.Stack
 
-
 class Lexer(_source: String, mode: SourceMode) {
+    private val reporter: Reporter = ConsoleReporter()
     private enum class StringType {
         SINGLE,
         DOUBLE;
@@ -132,12 +136,12 @@ class Lexer(_source: String, mode: SourceMode) {
 
     data class LexingException(val last: Token, val source: String) : RuntimeException()
 
-    data class Context(
+    data class Location(
         val line: Int, val column: Int,
         val lineContent: String, val file: String
     ) {
         override operator fun equals(other: Any?): Boolean {
-            if (other == null || other !is Context)
+            if (other == null || other !is Location)
                 return false
 
             if (other.hashCode() == hashCode())
@@ -192,24 +196,27 @@ class Lexer(_source: String, mode: SourceMode) {
             return result
         }
 
-        fun `is`(t: TokenType): Boolean {
+        fun isType(t: TokenType): Boolean {
             return type == t
         }
 
-        fun `is`(s: String): Boolean {
+        fun isType(s: String): Boolean {
             return lexeme == s
         }
 
-        fun toContext(): Context {
-            return Context(line, column, lineContent, file)
+        fun toContext(): Location {
+            return Location(line, column, lineContent, file)
         }
     }
 
     private fun cancel(message: String, t: Token) {
+        reporter.error(ErrorType.LEXER, message, t.toContext())
         cancellationHook.invoke(message, t)
-        throw LexingException(t, source)
+        if (!keepGoing)
+            throw LexingException(t, source)
     }
 
+    var keepGoing: Boolean = true
     var hadError: Boolean = false
     var cancellationHook: (message: String, t: Token) -> Unit = { _: String, _: Token -> }
 
@@ -235,7 +242,7 @@ class Lexer(_source: String, mode: SourceMode) {
 
 
     private var line: Int = 1
-    private var column: Int = 1
+    private var column: Int = 0
     private var pos: Int = 0
     private val mode: SourceMode
     private val sourceLength: Int
@@ -251,7 +258,7 @@ class Lexer(_source: String, mode: SourceMode) {
             }
         }
 
-    val filename: String
+    val sourceName: String
         get() = if (file == null) "<input>" else file!!.name
 
     val tokens: Stack<Token> = Stack()
@@ -267,7 +274,7 @@ class Lexer(_source: String, mode: SourceMode) {
 
     fun clean() {
         line = 1
-        column = 1
+        column = 0
         pos = 0
         tokens.clear()
     }
@@ -429,8 +436,9 @@ class Lexer(_source: String, mode: SourceMode) {
         pushToken(type!!, result.toString())
     }
 
-    private fun pushToken(type: TokenType, literal: String) =
-        tokens.push(Token(literal, type, line, column - 1, filename, source.lines()[line - 1]))
+    private fun pushToken(type: TokenType, literal: String) {
+        tokens.push(Token(literal, type, line, column - 1, sourceName, source.lines()[line - 1]))
+    }
 
     private fun pushToken(type: TokenType, literal: Char) = pushToken(type, "%c".format(literal))
 

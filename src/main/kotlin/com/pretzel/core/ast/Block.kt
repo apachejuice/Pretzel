@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,11 @@ class Block : Node {
         this.nodes.addAll(nodes)
     }
 
-    private constructor(context: Lexer.Context) : super(context, context)
+    private constructor(location: Lexer.Location) : super(location, location)
 
     companion object {
-        fun empty(context: Lexer.Context): Block {
-            return Block(context)
+        fun empty(location: Lexer.Location): Block {
+            return Block(location)
         }
     }
 }

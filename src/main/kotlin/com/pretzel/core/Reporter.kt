@@ -14,20 +14,30 @@
  * limitations under the License.
  */
 
-package com.pretzel.core.ast
+package com.pretzel.core
 
-import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
+import org.fusesource.jansi.Ansi
 
-open class Literal(private val token: Lexer.Token) : Expression(token.toContext(), token.toContext(), Precedence.LOWEST) {
-    override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitLiteral(this)
-    }
 
-    val literal: String = token.lexeme
+interface Reporter {
+    var debug: Boolean
+    val errorCount: Int
+    val warningCount: Int
+    fun error(errorType: ErrorType, message: String, fault: Lexer.Location, overEOF: Boolean = false)
+    fun warning(errorType: ErrorType, message: String, fault: Lexer.Location)
+}
 
-    override fun toString(): String = if (token.type == Lexer.TokenType.STRING_LITERAL) "\"${token.lexeme}\"" else token.lexeme ?: "null"
+enum class ErrorType {
+    LEXER,
+    PARSER,
+    AST;
 
-    val type: Lexer.TokenType
-        get() = token.type
+    val format: String
+        get() {
+            return when (this) {
+                LEXER -> "lexical error"
+                PARSER, AST -> "syntax error"
+            }
+        }
 }

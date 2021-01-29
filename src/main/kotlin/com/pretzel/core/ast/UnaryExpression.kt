@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@ package com.pretzel.core.ast
 import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.parser.Parser
 
-class UnaryExpression(val target: Expression, val operator: Parser.UnaryOperator
+class UnaryExpression(val target: Expression, /*val operator: Parser.UnaryOperator*/
     ) : Expression(target.start, target.end, Precedence.SUPER_HIGH) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visitUnaryExpression(this)
     }
 
     override fun toString(): String {
-        return "${operator.operator}$target"
+        return ""//"${operator.operator}$target"
     }
 }

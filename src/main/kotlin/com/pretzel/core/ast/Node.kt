@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package com.pretzel.core.ast
 import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
-abstract class Node(val start: Lexer.Context, val end: Lexer.Context) : Iterable<Node> {
+abstract class Node(val start: Lexer.Location, val end: Lexer.Location) : Iterable<Node> {
     val hasChildren: Boolean
         get() = _children.isNotEmpty()
 

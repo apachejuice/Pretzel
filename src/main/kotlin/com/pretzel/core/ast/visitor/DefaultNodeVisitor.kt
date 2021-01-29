@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,11 +51,11 @@ class DefaultNodeVisitor : NodeVisitor<String> {
     }
 
     override fun visitBinaryExpression(binaryExpression: BinaryExpression): String {
-        return "${visitExpression(binaryExpression.left)} ${binaryExpression.operator.operator} ${visitExpression(binaryExpression.right)}"
+        return ""//"${visitExpression(binaryExpression.left)} ${binaryExpression.operator.operator} ${visitExpression(binaryExpression.right)}"
     }
 
     override fun visitUnaryExpression(unaryExpression: UnaryExpression): String {
-        return "${unaryExpression.operator?.operator ?: ""}${visitExpression(unaryExpression.target)}"
+        return ""//"${unaryExpression.operator.operator}${visitExpression(unaryExpression.target)}"
     }
 
     override fun visitLiteral(literal: Literal): String {

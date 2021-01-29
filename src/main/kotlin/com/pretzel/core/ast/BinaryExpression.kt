@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import com.pretzel.core.parser.Parser
 class BinaryExpression(
     val left: Expression,
     val right: Expression,
-    val operator: Parser.BinaryOperator,
+    //val operator: Parser.BinaryOperator,
     precedence: Precedence
 ) : Expression(left.start, right.end, precedence) {
 
@@ -31,6 +31,6 @@ class BinaryExpression(
     }
 
     override fun toString(): String {
-        return "$left${operator.operator}$right"
+        return ""//"$left${operator.operator}$right"
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package com.pretzel.core.ast
 import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
-class UseStmt(target: List<String>, start: Lexer.Context, end: Lexer.Context, val isWildcard: Boolean = false) : Node(start, end) {
+class UseStmt(target: List<String>, start: Lexer.Location, end: Lexer.Location, val isWildcard: Boolean = false) : Node(start, end) {
     val target: String = target.joinToString(separator = ":") { it } + if (isWildcard) ":*" else ""
 
     override fun <T> accept(visitor: NodeVisitor<T>): T {

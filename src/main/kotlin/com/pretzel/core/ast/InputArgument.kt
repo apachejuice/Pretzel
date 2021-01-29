@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Valio Valtokari
+ * Copyright 2021 apachejuice
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ class InputArgument(
     val name: Lexer.Token,
     val type: Lexer.Token? = null,
     val defaultValue: Expression? = null,
-    start: Lexer.Context,
-    end: Lexer.Context
+    start: Lexer.Location,
+    end: Lexer.Location
 ) : Node(start, end) {
 
     override fun <T> accept(visitor: NodeVisitor<T>): T {
