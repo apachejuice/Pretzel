@@ -61,7 +61,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             }
         }
 
-        reporter.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toContext(), false)
+        reporter.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toLocation(), false)
         return Lexer.Token.Companion.NullToken("")
     }
 
@@ -77,7 +77,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         for (s in applicant) {
             if (tt !== s) {
                 reporter.error(
-                    PARSER, "expected symbol of type '$s', got '$tt'", token.toContext(), false
+                    PARSER, "expected symbol of type '$s', got '$tt'", token.toLocation(), false
                 )
             }
         }
@@ -175,7 +175,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
      * @return The next token in the stream.
      */
     fun next(): Lexer.Token {
-        if (idx >= tokens.size) throw IndexOutOfBoundsException("idx >= tokens.size")
+        if (!hasNext()) throw IndexOutOfBoundsException("idx > tokens.size")
         return tokens[idx++]
     }
 

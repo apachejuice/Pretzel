@@ -65,6 +65,8 @@ class Lexer(_source: String, mode: SourceMode) {
         RSHIFTSET,
         URSHIFTSET,
         LSHIFTSET,
+        CONCAT_COMMA_SET,
+        CONCAT_SPACE_SET,
         BAND,
         ASSIGN,
         ARROW,
@@ -124,8 +126,10 @@ class Lexer(_source: String, mode: SourceMode) {
         WHEN,
         YES,
         XOR,
+        QUERY,
         RSHIFT,
         URSHIFT,
+        COALESCE,
         LSHIFT,
         QUOTE,
         SEMI,
@@ -204,13 +208,13 @@ class Lexer(_source: String, mode: SourceMode) {
             return lexeme == s
         }
 
-        fun toContext(): Location {
+        fun toLocation(): Location {
             return Location(line, column, lineContent, file)
         }
     }
 
     private fun cancel(message: String, t: Token) {
-        reporter.error(ErrorType.LEXER, message, t.toContext())
+        reporter.error(ErrorType.LEXER, message, t.toLocation())
         cancellationHook.invoke(message, t)
         if (!keepGoing)
             throw LexingException(t, source)
@@ -457,6 +461,23 @@ class Lexer(_source: String, mode: SourceMode) {
             '~' -> pushToken(TokenType.TILDE, c)
             ';' -> pushToken(TokenType.SEMI, c)
 
+            '?' -> {
+                val tok: String
+                val tt = when {
+                    match('?') -> {
+                        tok = "??"
+                        TokenType.COALESCE
+                    }
+
+                    else -> {
+                        tok = "?"
+                        TokenType.QUERY
+                    }
+                }
+
+                pushToken(tt, tok)
+            }
+
             '@' -> {
                 val quote = peek()
                 if (match('"') || match('"'))
@@ -467,16 +488,6 @@ class Lexer(_source: String, mode: SourceMode) {
             '^' -> {
                 val tok: String
                 val tt = when {
-                    match('^') -> {
-                        if (match('=')) {
-                            tok = "^^="
-                            TokenType.POWSET
-                        } else {
-                            tok = "^^"
-                            TokenType.POW
-                        }
-                    }
-
                     match('=') -> {
                         tok = "^="
                         TokenType.XORSET
@@ -516,6 +527,20 @@ class Lexer(_source: String, mode: SourceMode) {
             '*' -> {
                 val tok: String
                 val tt = when {
+                    match('*') -> {
+                        when {
+                            match('=') -> {
+                                tok = "**="
+                                TokenType.POWSET
+                            }
+
+                            else -> {
+                                tok = "**"
+                                TokenType.POW
+                            }
+                        }
+                    }
+
                     match('=') -> {
                         tok = "*="
                         TokenType.MULSET
@@ -565,11 +590,45 @@ class Lexer(_source: String, mode: SourceMode) {
             }
 
             '.' -> {
-                if (match('.')) {
-                    if (match('.')) {
-                        pushToken(TokenType.CONCAT_COMMA, "...")
-                    } else pushToken(TokenType.CONCAT_SPACE, "..")
-                } else pushToken(TokenType.DOT, '.')
+                val tok: String
+                val tt = when {
+                    match('.') -> {
+                        when {
+                            match('.') -> {
+                                when {
+                                    match('=') -> {
+                                        tok = "...="
+                                        TokenType.CONCAT_COMMA_SET
+                                    }
+
+                                    else -> {
+                                        tok = "..."
+                                        TokenType.CONCAT_COMMA
+                                    }
+                                }
+                            }
+
+                            else -> when {
+                                match('=') -> {
+                                    tok = "..="
+                                    TokenType.CONCAT_SPACE_SET
+                                }
+
+                                else -> {
+                                    tok = ".."
+                                    TokenType.CONCAT_SPACE
+                                }
+                            }
+                        }
+                    }
+
+                    else -> {
+                        tok = "."
+                        TokenType.DOT
+                    }
+                }
+
+                pushToken(tt, tok)
             }
 
             '!' -> {
@@ -615,12 +674,16 @@ class Lexer(_source: String, mode: SourceMode) {
                     }
 
                     match('<') -> {
-                        if (match('=')) {
-                            tok = "<<="
-                            TokenType.LSHIFTSET
-                        } else {
-                            tok = "<<"
-                            TokenType.LSHIFT
+                        when {
+                            match('=') -> {
+                                tok = "<<="
+                                TokenType.LSHIFTSET
+                            }
+
+                            else -> {
+                                tok = "<<"
+                                TokenType.LSHIFT
+                            }
                         }
                     }
 
@@ -649,12 +712,16 @@ class Lexer(_source: String, mode: SourceMode) {
                             }
 
                             match('>') -> {
-                                if (match('=')) {
-                                    tok = ">>>="
-                                    TokenType.URSHIFTSET
-                                } else {
-                                    tok = ">>>"
-                                    TokenType.URSHIFT
+                                when {
+                                    match('=') -> {
+                                        tok = ">>>="
+                                        TokenType.URSHIFTSET
+                                    }
+
+                                    else -> {
+                                        tok = ">>>"
+                                        TokenType.URSHIFT
+                                    }
                                 }
                             }
 

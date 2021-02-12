@@ -83,13 +83,13 @@ enum class Precedence(val level: Int) {
     SUPER_LOW(2),
 
     /**
-     * The if expression/statement `<thing> if <condition> else <thing> `
+     * The trinary expression <condition> ? <expression-if-yes> : <expression-if-no>
      */
     EXTREMELY_LOW(1),
 
     /**
      * Assignment:
-     * +=   -=  ^^=
+     * +=   -=  **=
      * *=   /=   %=
      * &=   ^=   |=
      * <<=  >>= >>>=

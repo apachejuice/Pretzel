@@ -17,10 +17,14 @@
 package com.pretzel.core.ast
 
 import com.pretzel.core.ast.visitor.NodeVisitor
-import com.pretzel.core.lexer.Lexer
+import com.pretzel.core.lexer.Lexer.Location
 
-class VariableReference(val token: Lexer.Token) : Literal(token) {
+class VariableReference(val fullPath: String, start: Location, end: Location) : Expression(start, end, Precedence.LOWEST) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visitVariableReference(this)
+    }
+
+    override fun toString(): String {
+        return fullPath
     }
 }

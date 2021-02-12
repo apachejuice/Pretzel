@@ -16,14 +16,10 @@
 
 package com.pretzel.core.ast
 
-import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
-open class Literal(private val token: Lexer.Token) : Expression(token.toContext(), token.toContext(), Precedence.LOWEST) {
-    override fun <T> accept(visitor: NodeVisitor<T>): T {
-        return visitor.visitLiteral(this)
-    }
-
+abstract class Literal<T>(private val token: Lexer.Token) : Expression(token.toLocation(), token.toLocation(), Precedence.LOWEST) {
+    abstract val value: T
     val literal: String = token.lexeme
 
     override fun toString(): String = if (token.type == Lexer.TokenType.STRING_LITERAL) "\"${token.lexeme}\"" else token.lexeme ?: "null"

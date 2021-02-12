@@ -16,9 +16,9 @@
 
 package com.pretzel
 
+import com.pretzel.core.CodeContext
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
-import com.pretzel.core.parser.Parser
 
 class Main {
     companion object {
@@ -29,8 +29,26 @@ class Main {
 
         @JvmStatic
         fun runRepl(vararg args: String) {
-            val l = Lexer("() + {]} 345 -2 5/2 ", Lexer.SourceMode.DIRECT)
-            Parser(TokenStream.open(l))
+            var cc: CodeContext
+
+            while (true) {
+                print(">>> ")
+                cc = CodeContext(
+                    keepGoing = true,
+                    debug = true,
+                    source = readLine()!!,
+                    sourceMode = Lexer.SourceMode.DIRECT
+                )
+
+                val l = cc.createLexer()
+                val p = cc.createParser(TokenStream.open(l))
+                val n = p.parse()
+                p.dumpStateTransitions()
+                if (n != null) {
+                    val e = EvaluatingNodeVisitor()
+                    println(e.walk(n))
+                }
+            }
         }
     }
 }

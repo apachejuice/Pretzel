@@ -18,18 +18,20 @@ package com.pretzel.core.ast
 
 import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
+import com.pretzel.core.parser.Parser
 
 class VariableAssignment(
     val name: String,
     val newValue: Expression,
+    val operator: Parser.BinaryOperator,
     start: Lexer.Location,
     end: Lexer.Location,
-) : Node(start, end) {
+) : Expression(start, end, operator.precedence) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visitVariableAssignment(this)
     }
 
     override fun toString(): String {
-        return "$name=$newValue"
+        return "$name${operator.literal}$newValue"
     }
 }

@@ -28,6 +28,7 @@ class ConsoleReporter : Reporter {
         get() = errorCalls
     override val warningCount: Int
         get() = warningCalls
+    override var columnOffset: Int = 0
 
     override fun error(errorType: ErrorType, message: String, fault: Lexer.Location, overEOF: Boolean) {
         errorCalls++
@@ -36,7 +37,7 @@ class ConsoleReporter : Reporter {
                 |Message: $message
                 |line ${fault.line}:
                 | | ${fault.lineContent}
-                |  ${" ".repeat(fault.column + (if (overEOF) 1 else 0)) + "^"}
+                |  ${" ".repeat(columnOffset + fault.column + (if (overEOF) 1 else 0)) + "^"}
                 |${if (debug) "Stack trace:\n" else ""}
             """.trimMargin()
         print(msg)
@@ -50,7 +51,7 @@ class ConsoleReporter : Reporter {
 
     override fun warning(errorType: ErrorType, message: String, fault: Lexer.Location) {
         warningCalls++
-        val msg = "WARNING[$errorType, file '${fault.file}' at ${fault.line}:${fault.column}]: $message"
+        val msg = "WARNING[$errorType, file '${fault.file}' at ${fault.line}:${columnOffset + fault.column}]: $message"
         println(Ansi.ansi().fg(Ansi.Color.MAGENTA).a(msg).reset())
         if (debug) prettyPrintStackTrace(Throwable().stackTrace)
     }

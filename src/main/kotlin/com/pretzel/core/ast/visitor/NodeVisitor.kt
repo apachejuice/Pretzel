@@ -19,19 +19,25 @@ package com.pretzel.core.ast.visitor
 import com.pretzel.core.ast.Argument
 import com.pretzel.core.ast.BinaryExpression
 import com.pretzel.core.ast.Block
+import com.pretzel.core.ast.BooleanLiteral
 import com.pretzel.core.ast.EmptyStatement
 import com.pretzel.core.ast.Expression
+import com.pretzel.core.ast.FloatLiteral
 import com.pretzel.core.ast.FunctionCall
 import com.pretzel.core.ast.FunctionDeclaration
 import com.pretzel.core.ast.IfStatement
 import com.pretzel.core.ast.InputArgument
-import com.pretzel.core.ast.Literal
+import com.pretzel.core.ast.IntLiteral
+import com.pretzel.core.ast.LongLiteral
 import com.pretzel.core.ast.MemberAccess
 import com.pretzel.core.ast.ModStmt
 import com.pretzel.core.ast.Node
 import com.pretzel.core.ast.ObjectCreation
-import com.pretzel.core.ast.ParsenthesizedExpression
+import com.pretzel.core.ast.ParenthesizedExpression
 import com.pretzel.core.ast.ReturnStatement
+import com.pretzel.core.ast.ShortLiteral
+import com.pretzel.core.ast.StringLiteral
+import com.pretzel.core.ast.TrinaryExpression
 import com.pretzel.core.ast.UnaryExpression
 import com.pretzel.core.ast.UseStmt
 import com.pretzel.core.ast.VariableAssignment
@@ -43,12 +49,17 @@ interface NodeVisitor<T> {
     fun visitExpression(expression: Expression): T
     fun visitBinaryExpression(binaryExpression: BinaryExpression): T
     fun visitUnaryExpression(unaryExpression: UnaryExpression): T
-    fun visitLiteral(literal: Literal): T
+    fun visitBooleanLiteral(booleanLiteral: BooleanLiteral): T
+    fun visitIntLiteral(intLiteral: IntLiteral): T
+    fun visitFloatLiteral(floatLiteral: FloatLiteral): T
+    fun visitStringLiteral(stringLiteral: StringLiteral): T
+    fun visitLongLiteral(longLiteral: LongLiteral): T
+    fun visitShortLiteral(shortLiteral: ShortLiteral): T
     fun visitFunctionCall(functionCall: FunctionCall): T
     fun visitModStmt(modStmt: ModStmt): T
     fun visitObjectCreation(objectCreation: ObjectCreation): T
     fun visitArgument(argument: Argument): T
-    fun visiParenthesizedExpression(parsenthesizedExpression: ParsenthesizedExpression): T
+    fun visiParenthesizedExpression(parenthesizedExpression: ParenthesizedExpression): T
     fun visitVariableCreation(variableCreation: VariableCreation): T
     fun visitVariableAssignment(variableAssignment: VariableAssignment): T
     fun visitMemberAccess(memberAccess: MemberAccess): T
@@ -60,4 +71,5 @@ interface NodeVisitor<T> {
     fun visitFunctionDeclaration(functionDeclaration: FunctionDeclaration): T
     fun visitInputArgument(inputArgument: InputArgument): T
     fun visitReturnStatement(returnStatement: ReturnStatement): T
+    fun visitTrinaryExpression(trinaryExpression: TrinaryExpression): T
 }

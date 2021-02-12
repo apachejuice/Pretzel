@@ -24,6 +24,7 @@ interface Reporter {
     var debug: Boolean
     val errorCount: Int
     val warningCount: Int
+    var columnOffset: Int
     fun error(errorType: ErrorType, message: String, fault: Lexer.Location, overEOF: Boolean = false)
     fun warning(errorType: ErrorType, message: String, fault: Lexer.Location)
 }

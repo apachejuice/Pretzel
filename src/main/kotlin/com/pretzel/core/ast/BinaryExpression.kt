@@ -22,8 +22,8 @@ import com.pretzel.core.parser.Parser
 class BinaryExpression(
     val left: Expression,
     val right: Expression,
-    //val operator: Parser.BinaryOperator,
-    precedence: Precedence
+    val operator: Parser.BinaryOperator,
+    precedence: Precedence = operator.precedence,
 ) : Expression(left.start, right.end, precedence) {
 
     override fun <T> accept(visitor: NodeVisitor<T>): T {
@@ -31,6 +31,6 @@ class BinaryExpression(
     }
 
     override fun toString(): String {
-        return ""//"$left${operator.operator}$right"
+        return "$left${operator.literal}$right"
     }
 }
