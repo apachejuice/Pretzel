@@ -22,7 +22,7 @@ abstract class Literal<T>(private val token: Lexer.Token) : Expression(token.toL
     abstract val value: T
     val literal: String = token.lexeme
 
-    override fun toString(): String = if (token.type == Lexer.TokenType.STRING_LITERAL) "\"${token.lexeme}\"" else token.lexeme ?: "null"
+    override fun toString(): String = if (token.type == Lexer.TokenType.STRING_LITERAL) "\"${token.lexeme}\"" else token.lexeme
 
     val type: Lexer.TokenType
         get() = token.type

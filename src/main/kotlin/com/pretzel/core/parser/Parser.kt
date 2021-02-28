@@ -398,7 +398,8 @@ class Parser(val stream: TokenStream) {
         POW("**", Precedence.VERY_HIGH, TokenType.POW),
         LT("<", Precedence.MEDIUM, TokenType.LT),
         LTEQ("<=", Precedence.MEDIUM, TokenType.LTEQ),
-        STRSPACE("..", Precedence.PRETTY_HIGH, TokenType.CONCAT_SPACE);
+        STRSPACE("..", Precedence.PRETTY_HIGH, TokenType.CONCAT_SPACE),
+        NONE("", Precedence.LOWEST, TokenType.EOF);
 
         companion object {
             fun forTT(tt: TokenType): BinaryOperator? {
@@ -415,17 +416,12 @@ class Parser(val stream: TokenStream) {
                     return result
                 }
 
-            val assignmentOps: List<BinaryOperator>
+            val assignmentOps: List<TokenType>
                 get() {
-                    val result = mutableListOf<BinaryOperator>()
-                    values().forEach { if (it.name.endsWith("SET")) result.add(it) }
+                    val result = mutableListOf<TokenType>()
+                    values().forEach { if (it.name.endsWith("SET")) result.add(it.tt) }
                     return result
                 }
-
-            val comparisonOps: List<BinaryOperator> = listOf(EQ, NOTEQ, GT, LT, LTEQ, GTEQ)
-            val shiftOps: List<BinaryOperator> = listOf(SIGNEDL, SIGNEDR, UNSIGNEDR)
-            val prettyHighOps: List<BinaryOperator> = listOf(PLUS, MINUS, STRCOMMA, STRSPACE)
-            val multiplicativeOps: List<BinaryOperator> = listOf(MUL, DIV, MOD)
         }
 
         val assoc: Associativity
@@ -465,64 +461,33 @@ class Parser(val stream: TokenStream) {
     private val invalidExpr
         get() = VariableReference("", beginLoc, beginLoc)
 
-    private fun expression(): Expression {
+    fun expression(): Expression {
         pushState(EXPRESSION)
-        return multiplicative().also { popState(EXPRESSION) }
+        return expression(0).also { popState(EXPRESSION) }
     }
 
-    private fun multiplicative(): Expression {
-        begin()
-        var root = additive()
+    private fun expression(minPrec: Int): Expression {
+        var result = literalOrValue()
 
-        val tt = stream.seek().type
-        while (stream.acceptIfNext(TokenType.MUL, TokenType.MOD, TokenType.DIV)) {
-            root = BinaryExpression(root, expression(), BinaryOperator.forTT(tt)!!)
-        }
-
-        return root
-    }
-
-    private fun additive(): Expression {
-        begin()
-        var root = trinary()
-        while (stream.acceptIfNext(TokenType.PLUS, TokenType.MINUS, TokenType.CONCAT_SPACE, TokenType.CONCAT_COMMA)) {
-            root = BinaryExpression(root, expression(), BinaryOperator.PLUS)
-        }
-
-        return root
-    }
-
-    private fun trinary(): Expression {
-        begin()
-        var root = assignment()
-        while (stream.acceptIfNext(TokenType.QUERY)) {
-            val cond = root
-            val ifTrue = expression()
-            acceptToken(TokenType.COLON, message = "expected a colon for trinary expression candidates")
-            val ifFalse = expression()
-            root = TrinaryExpression(cond, ifTrue, ifFalse)
-        }
-
-        return root
-    }
-
-    private fun assignment(): Expression {
-        begin()
-        var root = literalOrValue()
-        val token = stream.seek()
-        val type = token.type
-
-        if (type in BinaryOperator.tokenTypes) {
-            var bop = BinaryOperator.forTT(type)
-            while (bop != null && bop in BinaryOperator.assignmentOps) {
-                stream.advance()
-                root = BinaryExpression(root, expression(), bop)
-                if (stream.seek().type in BinaryOperator.tokenTypes)
-                    bop = BinaryOperator.forTT(stream.seek().type)
+        while (true) {
+            val current = stream.seek()
+            if (current.type == TokenType.EOF
+                    || current.type !in BinaryOperator.tokenTypes
+                    || BinaryOperator.forTT(current.type)!!.precedence.level < minPrec) {
+                break
             }
+
+            val bop = BinaryOperator.forTT(current.type)!!
+            val prec = bop.precedence.level
+            val assoc = bop.assoc
+            var nextMinPrec = prec
+            if (assoc == Associativity.LEFT) nextMinPrec++
+            stream.advance()
+            val rhs = expression(nextMinPrec)
+            result = BinaryExpression(result, rhs, bop)
         }
 
-        return root
+        return result
     }
 
     private fun literalOrValue(): Expression {
@@ -533,7 +498,7 @@ class Parser(val stream: TokenStream) {
             TokenType.LPAREN -> {
                 stream.advance()
                 val expr = expression()
-                acceptToken(TokenType.RPAREN, message = "mismatched '('")
+                acceptToken(TokenType.RPAREN, message = "expected ')'")
                 return ParenthesizedExpression(expr)
             }
 

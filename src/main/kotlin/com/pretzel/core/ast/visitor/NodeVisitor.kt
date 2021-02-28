@@ -28,6 +28,7 @@ import com.pretzel.core.ast.FunctionDeclaration
 import com.pretzel.core.ast.IfStatement
 import com.pretzel.core.ast.InputArgument
 import com.pretzel.core.ast.IntLiteral
+import com.pretzel.core.ast.Literal
 import com.pretzel.core.ast.LongLiteral
 import com.pretzel.core.ast.MemberAccess
 import com.pretzel.core.ast.ModStmt
@@ -72,4 +73,5 @@ interface NodeVisitor<T> {
     fun visitInputArgument(inputArgument: InputArgument): T
     fun visitReturnStatement(returnStatement: ReturnStatement): T
     fun visitTrinaryExpression(trinaryExpression: TrinaryExpression): T
+    fun visitLiteral(literal: Literal<*>): T
 }
