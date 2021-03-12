@@ -272,7 +272,6 @@ class Parser(val stream: TokenStream) {
     }
 
     private fun cancel(message: String, loc: Location = realLoc, sync: Boolean = true) {
-        println("cancel: $realLoc")
         pushState(ERROR)
         cancellationHook.invoke(loc, mergeStates(), lastTransition)
         reporter.error(ErrorType.PARSER, message, loc)
@@ -313,7 +312,6 @@ class Parser(val stream: TokenStream) {
 
     private fun acceptToken(vararg types: TokenType, message: String = ""): Token {
         val result = stream.seek()
-        println(result.toLocation())
         if (result.type !in types) {
             var alts = ""
             if (types.size == 1) alts = types[0].name
