@@ -14,7 +14,34 @@
  * limitations under the License.
  */
 
-rootProject.name = "Pretzel"
-include("src:test")
-findProject(":src:test")?.name = "test"
-include("pbgl")
+plugins {
+    java
+    kotlin("jvm")
+    id("com.github.johnrengelman.shadow")
+}
+
+
+group = "com.pretzel.pbgl"
+version = "0.1"
+
+repositories {
+    mavenCentral()
+}
+
+tasks {
+    shadowJar {
+        archiveBaseName.set("pbgl")
+        archiveClassifier.set("")
+        archiveVersion.set("0.1")
+    }
+    compileKotlin {
+        kotlinOptions.jvmTarget = "1.8"
+    }
+    compileTestKotlin {
+        kotlinOptions.jvmTarget = "1.8"
+    }
+}
+
+dependencies {
+    implementation(kotlin("stdlib-jdk8"))
+}

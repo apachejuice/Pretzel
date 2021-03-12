@@ -44,10 +44,6 @@ class Main {
                 val p = cc.createParser(TokenStream.open(l))
                 val n = p.parse()
                 p.dumpStateTransitions()
-                if (n != null) {
-                    val e = EvaluatingNodeVisitor()
-                    println(e.walk(n))
-                }
             }
         }
     }
