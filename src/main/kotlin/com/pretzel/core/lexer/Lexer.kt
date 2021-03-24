@@ -791,8 +791,7 @@ class Lexer(_source: String, mode: SourceMode) {
                 else divOrComment()
             }
 
-            ' ', '\r' -> { /* ignore */ }
-            '\t' -> shiftInLine()
+            '\t', ' ', '\r' -> { /* ignore */ }
             '\n' -> line++
             '"' -> string(StringType.DOUBLE)
             '\'' -> string(StringType.SINGLE)

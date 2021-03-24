@@ -319,18 +319,16 @@ class Parser(val stream: TokenStream) {
 
     fun parse(): Node? {
         val nodes = Stack<Node>()
-
         while (stream.hasNext()) {
             when (val tt = seekToken().type) {
                 TokenType.USE -> nodes.push(useStmt())
                 TokenType.MOD -> nodes.push(modStmt())
                 TokenType.FUNC -> nodes.push(parseFunctionDeclaration())
-                TokenType.VAR -> nodes.push(parseVariableDeclaration())
+                TokenType.VAR -> nodes.push(parseVariableDeclaration()).also { requireStatementDelimiter() }
                 TokenType.EOF -> break
                 else -> cancel("Unexpected token $tt, expected a top level declaration")
             }
 
-            stream.advance()
             if (nodes.isNotEmpty()) {
                 println("${nodes.peek()}        ${nodes.peek().javaClass.name}")
             }
@@ -723,6 +721,7 @@ class Parser(val stream: TokenStream) {
         val result = StringBuilder(begin.lexeme)
 
         if (stream.acceptIfNext(TokenType.COLON)) {
+            result.append(":")
             while (true) {
                 if (stream.isNext(TokenType.MUL)) {
                     cancel("variable references cannot have wildcards")
@@ -736,6 +735,7 @@ class Parser(val stream: TokenStream) {
         }
 
         if (stream.acceptIfNext(TokenType.DOT)) {
+            result.append(".")
             while (true) {
                 result.append(acceptToken(TokenType.IDENTIFIER).lexeme)
                 if (!stream.isNext(TokenType.DOT)) break
@@ -750,6 +750,7 @@ class Parser(val stream: TokenStream) {
         val start = location
         acceptToken(TokenType.USE)
         val target = modulePath()
+
         return UseStmt(
             target.first.split(":"),
             start,
@@ -762,6 +763,7 @@ class Parser(val stream: TokenStream) {
         val start = location
         acceptToken(TokenType.MOD)
         val target = modulePath(true)
+
         return ModStmt(
             target.first.split(":"),
             start,
