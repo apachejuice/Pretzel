@@ -21,7 +21,7 @@ import com.pretzel.core.lexer.Lexer
 
 class InputArgument(
     val name: Lexer.Token,
-    val type: Lexer.Token? = null,
+    internal val type: TypeReference,
     val defaultValue: Expression? = null,
     start: Lexer.Location,
     end: Lexer.Location
@@ -33,6 +33,6 @@ class InputArgument(
 
     override fun toString(): String {
         println("value: $defaultValue")
-        return "${name.lexeme}${if (type == null) "" else ": ${type.lexeme}"}${if (defaultValue == null) "" else " = $defaultValue"}"
+        return "${name.lexeme}${": ${type.target}"}${if (defaultValue == null) "" else " = $defaultValue"}"
     }
 }

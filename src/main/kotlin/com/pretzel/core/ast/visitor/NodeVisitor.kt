@@ -39,6 +39,7 @@ import com.pretzel.core.ast.ReturnStatement
 import com.pretzel.core.ast.ShortLiteral
 import com.pretzel.core.ast.StringLiteral
 import com.pretzel.core.ast.TrinaryExpression
+import com.pretzel.core.ast.TypeReference
 import com.pretzel.core.ast.UnaryExpression
 import com.pretzel.core.ast.UseStmt
 import com.pretzel.core.ast.VariableAssignment
@@ -74,4 +75,5 @@ interface NodeVisitor<T> {
     fun visitReturnStatement(returnStatement: ReturnStatement): T
     fun visitTrinaryExpression(trinaryExpression: TrinaryExpression): T
     fun visitLiteral(literal: Literal<*>): T
+    fun visitTypeReference(typeReference: TypeReference): T
 }

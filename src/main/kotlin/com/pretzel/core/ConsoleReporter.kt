@@ -33,7 +33,7 @@ class ConsoleReporter : Reporter {
     override fun error(errorType: ErrorType, message: String, fault: Lexer.Location, overEOF: Boolean) {
         errorCalls++
         val msg = """
-                |A ${errorType.format} occurred at $fault
+                |A ${errorType.format} occurred at ${fault.toString(columnOffset)}
                 |Message: $message
                 |line ${fault.line}:
                 | | ${fault.lineContent}
