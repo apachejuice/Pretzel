@@ -19,25 +19,7 @@ package com.pretzel.core.parser
 import com.pretzel.core.ConsoleReporter
 import com.pretzel.core.ErrorType
 import com.pretzel.core.Reporter
-import com.pretzel.core.ast.Argument
-import com.pretzel.core.ast.Associativity
-import com.pretzel.core.ast.BinaryExpression
-import com.pretzel.core.ast.BooleanLiteral
-import com.pretzel.core.ast.Expression
-import com.pretzel.core.ast.FloatLiteral
-import com.pretzel.core.ast.FunctionCall
-import com.pretzel.core.ast.IntLiteral
-import com.pretzel.core.ast.LongLiteral
-import com.pretzel.core.ast.ModStmt
-import com.pretzel.core.ast.Node
-import com.pretzel.core.ast.ObjectCreation
-import com.pretzel.core.ast.ParenthesizedExpression
-import com.pretzel.core.ast.Precedence
-import com.pretzel.core.ast.ShortLiteral
-import com.pretzel.core.ast.StringLiteral
-import com.pretzel.core.ast.TrinaryExpression
-import com.pretzel.core.ast.UseStmt
-import com.pretzel.core.ast.VariableReference
+import com.pretzel.core.ast.*
 import com.pretzel.core.lexer.Lexer.Token
 import com.pretzel.core.lexer.Lexer.Location
 import com.pretzel.core.lexer.Lexer.TokenType
@@ -54,6 +36,7 @@ import java.util.StringJoiner
 /**
  * A parser for Pretzel source files.
  */
+@Suppress("unused") // Enum values are accessed through reflection
 class Parser(val stream: TokenStream) {
     //region DFA
     data class StateTransition(val from: Int, val to: Int, val timestamp: Date = Date()) {
@@ -233,9 +216,6 @@ class Parser(val stream: TokenStream) {
         buf.close()
     }
 
-    private val realLoc: Location
-        get() = stream.seek().toLocation()
-
     private val lastTransition: StateTransition?
         get() {
             return if (transitions.isEmpty()) null
@@ -247,7 +227,8 @@ class Parser(val stream: TokenStream) {
     val transitions: Stack<StateTransition> = Stack()
     //endregion
 
-    private var beginLoc: Location = stream.seek().toLocation()
+    private val location: Location
+        get() = seekToken().toLocation()
 
     private val reporter: Reporter = ConsoleReporter()
     var keepGoing: Boolean = true
@@ -264,26 +245,36 @@ class Parser(val stream: TokenStream) {
         { _: Location, _: Int, _: StateTransition? -> }
 
     private fun synchronize() {
-        while (stream.seek().type !in SYNC_POINTS) stream.advance()
+        while (seekToken().type !in SYNC_POINTS) stream.advance()
     }
 
     private fun warning(message: String) {
-        reporter.warning(ErrorType.PARSER, message, realLoc)
+        reporter.warning(ErrorType.PARSER, message, location)
     }
 
-    private fun cancel(message: String, loc: Location = realLoc, sync: Boolean = true) {
+    private fun seekToken(): Token {
+        if (!stream.hasNext()) {
+            cancel("Unexpected EOF while parsing", loc = stream.tokens.last().toLocation(), sync = false, eof = true)
+        }
+
+        return stream.seek()
+    }
+
+    private fun cancel(message: String, loc: Location = location, sync: Boolean = true, eof: Boolean = false) {
         pushState(ERROR)
         cancellationHook.invoke(loc, mergeStates(), lastTransition)
         reporter.error(ErrorType.PARSER, message, loc)
-        if (sync)
-            if (keepGoing)
-                synchronize()
-            else
-                throw ParsingError(this, message, mergeStates(), loc)
-    }
+        if (eof) {
+            throw ParsingError(this, message, mergeStates(), loc)
+        }
 
-    init {
-        reporter.columnOffset = 1
+        if (sync) {
+            synchronize()
+        } else {
+            if (!keepGoing) {
+                throw ParsingError(this, message, mergeStates(), loc)
+            }
+        }
     }
 
     class ParsingError(
@@ -297,21 +288,12 @@ class Parser(val stream: TokenStream) {
         }
     }
 
-    private var startLocation: Location = beginLoc
-    private val span: Pair<Location, Location>
-        get() = startLocation to beginLoc
-
-    private fun begin() {
-        startLocation = beginLoc
-    }
-
     private fun rollback(loc: Location) {
-        beginLoc = loc
-        while (stream.seek().toLocation() != loc) stream.position--
+        while (seekToken().toLocation() != loc) stream.position--
     }
 
     private fun acceptToken(vararg types: TokenType, message: String = ""): Token {
-        val result = stream.seek()
+        val result = seekToken()
         if (result.type !in types) {
             var alts = ""
             if (types.size == 1) alts = types[0].name
@@ -326,8 +308,9 @@ class Parser(val stream: TokenStream) {
                     "expected one of $alts, got '${result.type}'"
                 else message
             )
-        } else stream.advance()
+        }
 
+        stream.advance()
         return result
     }
 
@@ -338,18 +321,172 @@ class Parser(val stream: TokenStream) {
         val nodes = Stack<Node>()
 
         while (stream.hasNext()) {
-            when (val tt = stream.seek().type) {
+            when (val tt = seekToken().type) {
                 TokenType.USE -> nodes.push(useStmt())
                 TokenType.MOD -> nodes.push(modStmt())
+                TokenType.FUNC -> nodes.push(parseFunctionDeclaration())
+                TokenType.VAR -> nodes.push(parseVariableDeclaration())
                 TokenType.EOF -> break
-                else -> nodes.push(expression())
+                else -> cancel("Unexpected token $tt, expected a top level declaration")
             }
 
             stream.advance()
-            println("${nodes.peek()}        ${nodes.peek().javaClass.name}")
+            if (nodes.isNotEmpty()) {
+                println("${nodes.peek()}        ${nodes.peek().javaClass.name}")
+            }
         }
 
         return if (nodes.isEmpty() || hadError) null else Node.getRootInstance(nodes)
+    }
+
+    private fun parseVariableDeclaration(): VariableCreation {
+        val start = location
+        acceptToken(TokenType.VAR)
+        val name = acceptToken(TokenType.IDENTIFIER, message = "Expected variable name")
+        val v = if (!stream.acceptIfNext(TokenType.ASSIGN)) {
+            VariableCreation(name.lexeme, null, start, location)
+        } else {
+            VariableCreation(name.lexeme, expression(), start, location)
+        }
+
+        return v
+    }
+
+    private fun parseIfStatement(): IfStatement {
+        acceptToken(TokenType.IF)
+        val condition = expression()
+        if (condition is ParenthesizedExpression) {
+            warning("Redundant parentheses around if condition")
+        }
+
+        val body = parseBlock()
+        val elifs = mutableListOf<IfStatement>()
+        var else_: Block? = null
+        while (stream.acceptIfNext(TokenType.ELIF)) {
+            val elifCondition = expression()
+            if (elifCondition is ParenthesizedExpression) {
+                warning("Redundant parentheses around elif condition")
+            }
+
+            elifs.add(IfStatement(elifCondition, parseBlock(), null, listOf()))
+        }
+
+        if (stream.acceptIfNext(TokenType.ELSE)) {
+            else_ = parseBlock()
+        }
+
+        return IfStatement(condition, body, else_, elifs)
+    }
+
+    private fun parseFunctionDeclaration(): FunctionDeclaration {
+        val start = location
+        acceptToken(TokenType.FUNC)
+        val name = acceptToken(TokenType.IDENTIFIER, message = "Expected function name")
+        acceptToken(TokenType.LPAREN, message = "Expected start of argument list")
+        val args = parseInputArgumentList()
+        acceptToken(TokenType.RPAREN, message = "Missing parentheses to end argument list")
+        val type = if (stream.isNext(TokenType.LBRACE, TokenType.ARROW)) {
+            null
+        } else {
+            parseType()
+        }
+
+        return FunctionDeclaration(type, name, args, parseBlock(), start, location)
+    }
+
+    private fun parseBlock(): Block {
+        val start = location
+        val type = acceptToken(TokenType.LBRACE, TokenType.ARROW, message = "Expected block start").type
+        if (type == TokenType.ARROW) {
+            return Block(listOf(when (seekToken().type) {
+                TokenType.VAR -> parseVariableDeclaration()
+                TokenType.IF -> parseIfStatement()
+                else -> expression()
+            }))
+        }
+
+        val statements = mutableListOf<Node>()
+        while (!stream.isNext(TokenType.RBRACE)) {
+            statements.add(when (seekToken().type) {
+                TokenType.EOF -> break
+                TokenType.VAR -> parseVariableDeclaration()
+                TokenType.IF -> parseIfStatement()
+                else -> expression()
+            })
+
+            requireStatementDelimiter()
+        }
+
+        acceptToken(TokenType.RBRACE, message = "Expected block end")
+        return if (statements.isEmpty()) Block.empty(start) else Block(statements)
+    }
+
+    private fun parseInputArgumentList(): MutableList<InputArgument> {
+        if (stream.isNext(TokenType.RPAREN)) return mutableListOf()
+        val list = mutableListOf<InputArgument>()
+        do {
+            if (stream.isNext(TokenType.COMMA)) {
+                warning("Unnecessary trailing comma")
+                break
+            }
+
+            list.add(parseInputArgument())
+        } while (stream.acceptIfNext(TokenType.COMMA))
+
+        return list
+    }
+
+    init {
+        reporter.columnOffset = 1
+    }
+
+    private fun parseInputArgument(): InputArgument {
+        val start = location
+        val name = acceptToken(TokenType.IDENTIFIER, message = "Expected argument name")
+        val type: TypeReference
+        val defaultValue: Expression?
+        stream.acceptIfNext(TokenType.COLON)
+
+        val hasDefaultValue: Boolean
+        if (stream.acceptIfNext(TokenType.ASSIGN).also { hasDefaultValue = it }
+            || stream.acceptIfNext(TokenType.COMMA)
+            || stream.acceptIfNext(TokenType.RPAREN)
+        ) {
+            warning("Missing type annotation - defaulting to Any")
+            type = TypeReference("Any", 0, start, location)
+            defaultValue = if (hasDefaultValue) {
+                expression()
+            } else {
+                null
+            }
+        } else {
+            type = parseType()
+            defaultValue = if (stream.acceptIfNext(TokenType.ASSIGN)) {
+                expression()
+            } else {
+                null
+            }
+        }
+
+        return InputArgument(name, type, defaultValue, start, location)
+    }
+
+    private fun parseType(): TypeReference {
+        val start = location
+        var arrayDepth = 0
+        while (stream.acceptIfNext(TokenType.LSQB)) {
+            arrayDepth++
+        }
+
+        val path = modulePath(true, false)
+        if (arrayDepth != 0) {
+            for (i in 1..arrayDepth) {
+                acceptToken(TokenType.RSQB, message = "Unbalanced array type: $arrayDepth != $i")
+            }
+        }
+
+        val type = "[".repeat(arrayDepth) + path.first + "]".repeat(arrayDepth)
+        return TypeReference(type, arrayDepth, start, location)
     }
 
     enum class BinaryOperator(
@@ -457,7 +594,7 @@ class Parser(val stream: TokenStream) {
     )
 
     private val invalidExpr
-        get() = VariableReference("", beginLoc, beginLoc)
+        get() = VariableReference("", location, location)
 
     fun expression(): Expression {
         pushState(EXPRESSION)
@@ -468,7 +605,7 @@ class Parser(val stream: TokenStream) {
         var result = literalOrValue()
 
         while (true) {
-            val current = stream.seek()
+            val current = seekToken()
             if (current.type == TokenType.EOF
                     || current.type !in BinaryOperator.tokenTypes
                     || BinaryOperator.forTT(current.type)!!.precedence.level < minPrec) {
@@ -489,8 +626,8 @@ class Parser(val stream: TokenStream) {
     }
 
     private fun literalOrValue(): Expression {
-        begin()
-        val token = stream.seek()
+        val start = location
+        val token = seekToken()
 
         when (val type = token.type) {
             TokenType.LPAREN -> {
@@ -522,26 +659,26 @@ class Parser(val stream: TokenStream) {
                 var args = listOf<Argument>()
                 acceptToken(TokenType.LPAREN)
                 if (!stream.acceptIfNext(TokenType.RPAREN)) {
-                    args = parseArgumenList()
+                    args = parseArgumentList()
                     acceptToken(TokenType.RPAREN)
                 }
 
-                return ObjectCreation(objectName.fullPath, args, startLocation, beginLoc)
+                return ObjectCreation(objectName.fullPath, args, start, location)
             }
 
             TokenType.IDENTIFIER -> {
                 val id = name()
                 return if (stream.acceptIfNext(TokenType.LPAREN)) {
-                    // Function call
-                    var args = listOf<Argument>()
-                    acceptToken(TokenType.LPAREN)
-                    if (!stream.acceptIfNext(TokenType.RPAREN)) {
-                        args = parseArgumenList()
+                    return if (stream.acceptIfNext(TokenType.RPAREN)) {
+                        FunctionCall(id.fullPath, start, location, listOf())
+                    } else {
+                        val args = parseArgumentList()
                         acceptToken(TokenType.RPAREN)
+                        FunctionCall(id.fullPath, start, location, args)
                     }
-                    acceptToken(TokenType.RPAREN)
-                    FunctionCall(id.fullPath, startLocation, beginLoc, args)
-                } else id
+                } else {
+                    VariableReference(id.fullPath, start, location)
+                }
             }
 
             else -> {
@@ -551,11 +688,10 @@ class Parser(val stream: TokenStream) {
         }
     }
 
-    private fun parseArgumenList(): MutableList<Argument> {
-        begin()
+    private fun parseArgumentList(): MutableList<Argument> {
         val list = mutableListOf<Argument>()
         do {
-            if (stream.isNext(TokenType.COMMA)) {
+            if (stream.acceptIfNext(TokenType.COMMA)) {
                 warning("unnecessary trailing comma")
                 break
             }
@@ -563,15 +699,14 @@ class Parser(val stream: TokenStream) {
             list.add(parseArgument())
         } while (stream.acceptIfNext(TokenType.COMMA))
 
-        return list;
+        return list
     }
 
     private fun parseArgument(): Argument {
-        begin()
-        val start = realLoc
+        val start = location
         val expr: Expression
 
-        val name = stream.seek()
+        val name = seekToken()
         if (stream.acceptIfNext(TokenType.IDENTIFIER)) {
             if (stream.acceptIfNext(TokenType.COLON)) {
                 expr = expression()
@@ -585,7 +720,7 @@ class Parser(val stream: TokenStream) {
 
 
     private fun name(): VariableReference {
-        begin()
+        val start = location
         val begin = acceptToken(TokenType.IDENTIFIER)
         val result = StringBuilder(begin.lexeme)
 
@@ -610,33 +745,33 @@ class Parser(val stream: TokenStream) {
             }
         }
 
-        return VariableReference(result.toString(), startLocation, beginLoc)
+        return VariableReference(result.toString(), start, location)
     }
 
     private fun useStmt(): UseStmt {
-        begin()
+        val start = location
         acceptToken(TokenType.USE)
         val target = modulePath()
         return UseStmt(
             target.first.split(":"),
-            span.first,
-            span.second,
+            start,
+            location,
             target.second,
         )
     }
 
     private fun modStmt(): ModStmt {
-        begin()
+        val start = location
         acceptToken(TokenType.MOD)
         val target = modulePath(true)
         return ModStmt(
             target.first.split(":"),
-            span.first,
-            span.second,
+            start,
+            location,
         )
     }
 
-    private fun modulePath(module: Boolean = false): Pair<String, Boolean> {
+    private fun modulePath(module: Boolean = false, delim: Boolean = true): Pair<String, Boolean> {
         val result = StringJoiner(":")
         var wildcard = false
         result.add(acceptToken(TokenType.IDENTIFIER).lexeme)
@@ -656,7 +791,7 @@ class Parser(val stream: TokenStream) {
             }
         }
 
-        requireStatementDelimiter()
+        if (delim) requireStatementDelimiter()
         return result.toString() to wildcard
     }
 }

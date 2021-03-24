@@ -19,12 +19,12 @@ package com.pretzel.core.ast
 import com.pretzel.core.ast.visitor.NodeVisitor
 import com.pretzel.core.lexer.Lexer
 
-class FunctionDeclaration(val type: Lexer.Token?, val name: Lexer.Token, val args: List<InputArgument>, val body: Block, start: Lexer.Location, end: Lexer.Location) : Node(start, end) {
+class FunctionDeclaration(val type: TypeReference?, val name: Lexer.Token, val args: List<InputArgument>, val body: Block, start: Lexer.Location, end: Lexer.Location) : Node(start, end) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visitFunctionDeclaration(this)
     }
 
     override fun toString(): String {
-        return "func ${name.lexeme}(${args.joinToString(separator = ", ") { "$it" }})${if (type == null) "" else "->${type.lexeme}"}{...}"
+        return "func ${name.lexeme}(${args.joinToString(separator = ", ") { "$it" }})${if (type == null) "" else "->${type.target}"}{...}"
     }
 }

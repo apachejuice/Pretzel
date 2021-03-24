@@ -163,8 +163,8 @@ class Lexer(_source: String, mode: SourceMode) {
             return result
         }
 
-        override fun toString(): String {
-            return "file '$file' $line:$column"
+        fun toString(columnOffset: Int = 0): String {
+            return "file '$file' $line:${column + columnOffset}"
         }
     }
 
@@ -242,6 +242,7 @@ class Lexer(_source: String, mode: SourceMode) {
         "yes" to TokenType.YES,
         "class" to TokenType.CLASS,
         "mod" to TokenType.MOD,
+        "let" to TokenType.VAR,
     )
 
 

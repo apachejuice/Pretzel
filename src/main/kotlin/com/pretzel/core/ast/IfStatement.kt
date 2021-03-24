@@ -18,12 +18,12 @@ package com.pretzel.core.ast
 
 import com.pretzel.core.ast.visitor.NodeVisitor
 
-class IfStatement(val condition: Expression, val then: Block, val _else: Block) : Node(condition.start, _else.end) {
+class IfStatement(val condition: Expression, val then: Block, val _else: Block?, val elifs: List<IfStatement>) : Node(condition.start, _else?.end ?: then.end) {
     override fun <T> accept(visitor: NodeVisitor<T>): T {
         return visitor.visitIfStatement(this)
     }
 
     override fun toString(): String {
-        return "if($condition){...}else{...}"
+        return "if($condition){...} ..."
     }
 }
