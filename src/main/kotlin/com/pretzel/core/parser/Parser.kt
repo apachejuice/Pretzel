@@ -575,6 +575,23 @@ class Parser(val stream: TokenStream) {
 
         val precedence: Precedence
             get() = Precedence.SUPER_HIGH
+           
+        
+        companion object {
+        	val tokenTypes: List<TokenType>
+                get() {
+                    val result = mutableListOf<TokenType>()
+                    values().forEach { result.add(it.tt) }
+                    return result
+                }
+                
+            fun forTT(tt: TokenType): UnaryOperator? {
+                for (v in values())
+                    if (v.tt == tt) return v
+
+                return null
+            }
+        }
     }
 
     private val literalTypes = listOf(
@@ -676,6 +693,11 @@ class Parser(val stream: TokenStream) {
                     VariableReference(id.fullPath, start, location)
                 }
             }
+
+            in UnaryOperator.tokenTypes -> {
+            	stream.advance();
+            	return UnaryExpression(expression(), UnaryOperator.forTT(type)!!)
+           	}
 
             else -> {
                 cancel("unexpected token '$type', expected expression or value")
