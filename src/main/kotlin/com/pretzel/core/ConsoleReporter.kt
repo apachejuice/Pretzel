@@ -33,14 +33,18 @@ class ConsoleReporter : Reporter {
     override fun error(errorType: ErrorType, message: String, fault: Lexer.Location, overEOF: Boolean) {
         errorCalls++
         val msg = """
-                |A ${errorType.format} occurred at ${fault.toString(columnOffset)}
                 |Message: $message
                 |line ${fault.line}:
                 | | ${fault.lineContent}
                 |  ${" ".repeat(columnOffset + fault.column + (if (overEOF) 1 else 0)) + "^"}
                 |${if (debug) "Stack trace:\n" else ""}
             """.trimMargin()
-        print(msg)
+        print(
+            Ansi.ansi().fg(Ansi.Color.RED).bold().a("A ${errorType.format} occurred at ${fault.toString(columnOffset)}").newline()
+                .reset().a(
+                msg
+            )
+        )
         if (debug) prettyPrintStackTrace(Throwable().stackTrace)
     }
 
@@ -51,8 +55,14 @@ class ConsoleReporter : Reporter {
 
     override fun warning(errorType: ErrorType, message: String, fault: Lexer.Location) {
         warningCalls++
-        val msg = "WARNING[$errorType, file '${fault.file}' at ${fault.line}:${columnOffset + fault.column}]: $message"
-        println(Ansi.ansi().fg(Ansi.Color.MAGENTA).a(msg).reset())
+        val msg = """
+                | | ${fault.lineContent}
+                |${if (debug) "Stack trace:\n" else ""}
+            """.trimMargin()
+        print(
+            Ansi.ansi().bold().fg(Ansi.Color.MAGENTA)
+                .a("Warning near ${fault.line}:${fault.column} at ${fault.file}: $message").newline().reset().a(msg)
+        )
         if (debug) prettyPrintStackTrace(Throwable().stackTrace)
     }
 }

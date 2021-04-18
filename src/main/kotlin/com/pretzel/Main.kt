@@ -16,7 +16,6 @@
 
 package com.pretzel
 
-import com.pretzel.core.CodeContext
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
 
@@ -29,22 +28,6 @@ class Main {
 
         @JvmStatic
         fun runRepl(vararg args: String) {
-            var cc: CodeContext
-
-            while (true) {
-                print(">>> ")
-                cc = CodeContext(
-                    keepGoing = true,
-                    debug = true,
-                    source = readLine()!!,
-                    sourceMode = Lexer.SourceMode.DIRECT
-                )
-
-                val l = cc.createLexer()
-                val p = cc.createParser(TokenStream.open(l))
-                val n = p.parse()
-                p.dumpStateTransitions()
-            }
         }
     }
 }
