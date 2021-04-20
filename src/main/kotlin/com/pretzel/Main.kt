@@ -18,6 +18,8 @@ package com.pretzel
 
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
+import com.pretzel.core.parser.ModStatementParser
+
 
 class Main {
     companion object {
@@ -28,6 +30,8 @@ class Main {
 
         @JvmStatic
         fun runRepl(vararg args: String) {
+            val ts = TokenStream.open(Lexer("mod std:io:Input", Lexer.SourceMode.DIRECT))
+            ModStatementParser(ts).parse()
         }
     }
 }

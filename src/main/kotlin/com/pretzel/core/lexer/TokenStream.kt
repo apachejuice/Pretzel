@@ -16,9 +16,9 @@
 
 package com.pretzel.core.lexer
 
-import com.pretzel.core.ErrorType.PARSER
-import com.pretzel.core.Reporter
-import com.pretzel.core.ConsoleReporter
+import com.pretzel.core.errors.ErrorCode
+import com.pretzel.core.errors.Reporter
+import com.pretzel.core.errors.StreamReporter
 
 import java.lang.IndexOutOfBoundsException
 import java.util.Objects
@@ -26,7 +26,7 @@ import java.util.Spliterator
 import java.util.function.Consumer
 
 class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
-    private val reporter: Reporter = ConsoleReporter()
+    val reporter: Reporter = StreamReporter(System.err)
 
     val tokens: MutableList<Lexer.Token>
         get() = _tokens
@@ -61,8 +61,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
             }
         }
 
-        reporter.error(PARSER, applicant.joinToString(separator = ", ") { it }, token.toLocation(), false)
-        return Lexer.Token.Companion.NullToken("")
+        return null!!
     }
 
     /**
@@ -76,9 +75,9 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
         val tt = token.type
         for (s in applicant) {
             if (tt !== s) {
-                reporter.error(
-                    PARSER, "expected symbol of type '$s', got '$tt'", token.toLocation(), false
-                )
+                /*reporter.error(
+                    ErrorCode.UNEXPECTED_EOF, token.toLocation(), false
+                )*/
             }
         }
         return token
@@ -254,10 +253,7 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
                 Lexer.Token(
                     "",
                     Lexer.TokenType.EOF,
-                    last.line,
-                    last.column + 1,
-                    last.file,
-                    last.lineContent
+                    last.span,
                 )
             )
         }
