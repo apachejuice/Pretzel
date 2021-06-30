@@ -36,6 +36,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.1")
     implementation("commons-cli:commons-cli:1.4")
     implementation("org.fusesource.jansi:jansi:2.1.1")
+    implementation("com.google.code.gson:gson:2.8.7")
 
 }
 

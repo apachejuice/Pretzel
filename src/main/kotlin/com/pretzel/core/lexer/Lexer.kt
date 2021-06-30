@@ -24,7 +24,7 @@ import java.io.File
 import java.util.Stack
 
 class Lexer(_source: String, mode: SourceMode) {
-    private val reporter: Reporter = StreamReporter(System.err)
+    val reporter: Reporter = StreamReporter(_source, System.err)
 
     enum class SourceMode {
         FILE,
@@ -45,6 +45,7 @@ class Lexer(_source: String, mode: SourceMode) {
         URSHIFTSET,
         LSHIFTSET,
         CONCAT_COMMA_SET,
+        COALESCESET,
         CONCAT_SPACE_SET,
         BAND,
         ASSIGN,
@@ -54,7 +55,6 @@ class Lexer(_source: String, mode: SourceMode) {
         BREAK,
         HEX_LITERAL,
         CLASS,
-        COLON,
         COMMA,
         CONCAT_COMMA,
         CONCAT_SPACE,
@@ -105,6 +105,8 @@ class Lexer(_source: String, mode: SourceMode) {
         FOR,
         WHILE,
         USE,
+        TO,
+        AS,
         VAR,
         WHEN,
         YES,
@@ -117,12 +119,17 @@ class Lexer(_source: String, mode: SourceMode) {
         QUOTE,
         SEMI,
         EOF,
+        PLUSPLUS,
+        MINUSMINUS,
+        NONNULL,
+        COLON,
 
         // no token
         INVALID,
     }
 
-    data class LexingException(val last: Token, val source: String) : RuntimeException()
+    data class LexingException(val last: Token, val source: String) :
+        RuntimeException()
 
     data class Location(
         val pos: Int, val line: Int, val column: Int, val file: String
@@ -147,13 +154,16 @@ class Lexer(_source: String, mode: SourceMode) {
         fun toString(columnOffset: Int = 0): String {
             return "file '$file' $line:${column + columnOffset}"
         }
+
+        override fun toString(): String {
+            return toString(0)
+        }
     }
 
     data class Span(
         val start: Location,
         val end: Location,
         val content: String,
-        val lineContent: String
     ) {
         override operator fun equals(other: Any?): Boolean {
             if (other == null || other !is Span)
@@ -211,14 +221,17 @@ class Lexer(_source: String, mode: SourceMode) {
     }
 
     private fun cancel(code: ErrorCode, t: Token) {
-        reporter.error(code, t.span, "'${t.lexeme}'")
+        reporter.error(
+            code,
+            t.span,
+            "The lexer fonud an unexpected token that is not used in the language '${t.lexeme}'"
+        )
         cancellationHook.invoke(code, t)
         if (!keepGoing)
             throw LexingException(t, source)
     }
 
     var keepGoing: Boolean = true
-    var hadError: Boolean = false
     var cancellationHook: (code: ErrorCode, t: Token) -> Unit =
         { _: ErrorCode, _: Token -> }
 
@@ -245,6 +258,8 @@ class Lexer(_source: String, mode: SourceMode) {
         "foreach" to TokenType.FOREACH,
         "while" to TokenType.WHILE,
         "from" to TokenType.FROM,
+        "to" to TokenType.TO,
+        "as" to TokenType.AS,
     )
 
 
@@ -256,6 +271,7 @@ class Lexer(_source: String, mode: SourceMode) {
         get() = source.length
     private val currentLoc: Location
         get() = Location(pos, line, column, sourceName)
+
     private var startLocation: Location
 
     val source: String
@@ -343,7 +359,6 @@ class Lexer(_source: String, mode: SourceMode) {
                     if (isAtEnd()) {
                         pushToken(TokenType.MUL, "*")
                         cancel(ErrorCode.UNEXPECTED_EOF, tokens.lastElement())
-                        hadError = true
                         // make sure to not fall in an endless loop
                         next()
                         return
@@ -369,7 +384,6 @@ class Lexer(_source: String, mode: SourceMode) {
         if (isAtEnd()) {
             pushToken(TokenType.QUOTE, '"')
             cancel(ErrorCode.UNEXPECTED_EOF, tokens.lastElement())
-            hadError = true
             return
         }
 
@@ -464,7 +478,6 @@ class Lexer(_source: String, mode: SourceMode) {
                     startLocation,
                     currentLoc,
                     source.substring(startLocation.pos, currentLoc.pos),
-                    source.lines()[startLocation.line - 1]
                 )
             )
         )
@@ -477,6 +490,7 @@ class Lexer(_source: String, mode: SourceMode) {
 
     private fun getNextToken() {
         when (val c = next()) {
+            ':' -> pushToken(TokenType.COLON, c)
             '(' -> pushToken(TokenType.LPAREN, c)
             ')' -> pushToken(TokenType.RPAREN, c)
             '{' -> pushToken(TokenType.LBRACE, c)
@@ -484,7 +498,6 @@ class Lexer(_source: String, mode: SourceMode) {
             '[' -> pushToken(TokenType.LSQB, c)
             ']' -> pushToken(TokenType.RSQB, c)
             ',' -> pushToken(TokenType.COMMA, c)
-            ':' -> pushToken(TokenType.COLON, c)
             '#' -> pushToken(TokenType.HASHTAG, c)
             '$' -> pushToken(TokenType.VAR, c)
             '~' -> pushToken(TokenType.TILDE, c)
@@ -541,6 +554,11 @@ class Lexer(_source: String, mode: SourceMode) {
                     match('=') -> {
                         tok = "-="
                         TokenType.MINUSSET
+                    }
+
+                    match('-') -> {
+                        tok = "--"
+                        TokenType.MINUSMINUS
                     }
 
                     else -> {
@@ -608,6 +626,11 @@ class Lexer(_source: String, mode: SourceMode) {
                         TokenType.PLUSSET
                     }
 
+                    match('+') -> {
+                        tok = "++"
+                        TokenType.PLUSPLUS
+                    }
+
                     else -> {
                         tok = "+"
                         TokenType.PLUS
@@ -665,6 +688,11 @@ class Lexer(_source: String, mode: SourceMode) {
                     match('=') -> {
                         tok = "!="
                         TokenType.NOTEQ
+                    }
+
+                    match('!') -> {
+                        tok = "!!"
+                        TokenType.NONNULL
                     }
 
                     else -> {
@@ -817,8 +845,7 @@ class Lexer(_source: String, mode: SourceMode) {
                 if (match('=')) pushToken(TokenType.DIVSET, "/=")
                 else divOrComment()
             }
-
-            '\t', ' ', '\r' -> { /* ignore */
+            '\t', ' ', '\r' -> {/* ignoor */
             }
             '\n' -> line++
             '"' -> string()
@@ -829,7 +856,6 @@ class Lexer(_source: String, mode: SourceMode) {
                 else {
                     pushToken(TokenType.INVALID, c.toString())
                     cancel(ErrorCode.UNEXPECTED_TOKEN, tokens.lastElement())
-                    hadError = true
                 }
             }
         }

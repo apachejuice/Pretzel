@@ -3,21 +3,22 @@ package com.pretzel.core.parser.ast
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.parser.ast.visit.ASTVisitor
 
-class UseStatement(
+class ModuleDeclaration(
     override val target: Symbol,
-    override val sourceRange: Lexer.Span,
+    override val sourceRange: Lexer.Span
 ) : CodeNode(), SymbolTargetNode {
-    override fun toString(): String {
-        return "UseStatement($target)"
-    }
-
     override val nodeType: Type
-        get() = Type.USE_STATEMENT
+        get() = Type.MODULE_DECLARATION
+
     override val isVisibleInSource: Boolean
         get() = true
 
     override fun <T> accept(astVisitor: ASTVisitor<T>): T {
-        return astVisitor.visitUseStatement(this)
+        return astVisitor.visitModuleDeclaration(this)
+    }
+
+    override fun toString(): String {
+        return "ModuleDeclaration($target)"
     }
 
     init {

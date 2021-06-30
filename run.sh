@@ -15,5 +15,4 @@
 #
 
 clear
-./gradlew shadow
-java "$@" -jar build/libs/pretzel-0.1.jar
+./gradlew shadow && java "$@" -jar build/libs/pretzel-0.1.jar

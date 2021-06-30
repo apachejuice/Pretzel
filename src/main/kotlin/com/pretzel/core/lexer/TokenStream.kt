@@ -16,7 +16,6 @@
 
 package com.pretzel.core.lexer
 
-import com.pretzel.core.errors.ErrorCode
 import com.pretzel.core.errors.Reporter
 import com.pretzel.core.errors.StreamReporter
 
@@ -25,18 +24,18 @@ import java.util.Objects
 import java.util.Spliterator
 import java.util.function.Consumer
 
-class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterable<Lexer.Token?> {
-    val reporter: Reporter = StreamReporter(System.err)
+class TokenStream private constructor(
+    val lexer: Lexer,
+    tokens: MutableList<Lexer.Token>
+) : Iterable<Lexer.Token?> {
+    val reporter: Reporter = StreamReporter(lexer.source, System.err)
 
     val tokens: MutableList<Lexer.Token>
         get() = _tokens
 
-    /**
-     * Returns the lexer used by this instance of Lexer.TokenStream.
-     *
-     * @return The lexer used by this Lexer.TokenStream
-     */
-    lateinit var lexer: Lexer
+    val errors: Int
+        get() = lexer.reporter.errorCount
+
     private var _tokens: MutableList<Lexer.Token> = tokens
     private var idx: Int
     val length: Int
@@ -44,7 +43,9 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
 
     var position: Int
         get() = idx
-        set(value) { idx = value }
+        set(value) {
+            idx = value
+        }
 
     /**
      * Accepts a token at the current index.
@@ -217,32 +218,8 @@ class TokenStream private constructor(tokens: MutableList<Lexer.Token>) : Iterab
     }
 
     companion object {
-        /**
-         * Opens a Lexer.TokenStream with the specified Lexer instance.
-         *
-         * @return A new Lexer.TokenStream instance
-         */
         fun open(lexer: Lexer): TokenStream {
-            // ensure that lexer is in start state
-            lexer.clean()
-            lexer.getAllTokens()
-            val ts = TokenStream(lexer.tokens)
-            ts.lexer = lexer
-            return ts
-        }
-
-        /**
-         * Opens a Lexer.TokenStream with the specified filename.
-         *
-         * @return A new Lexer.TokenStream instance
-         */
-        fun open(file: String): TokenStream {
-            val lx = Lexer(file, Lexer.SourceMode.FILE)
-            return open(lx)
-        }
-
-        fun fromTokens(tokens: MutableList<Lexer.Token>): TokenStream {
-            return TokenStream(tokens)
+            return TokenStream(lexer, lexer.tokens)
         }
     }
 

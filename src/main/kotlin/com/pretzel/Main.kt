@@ -16,9 +16,16 @@
 
 package com.pretzel
 
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.pretzel.core.ensureEnd
+import com.pretzel.core.errors.StreamReporter
 import com.pretzel.core.lexer.Lexer
 import com.pretzel.core.lexer.TokenStream
-import com.pretzel.core.parser.ModStatementParser
+import com.pretzel.core.parser.ContextAgnosticParser
+import com.pretzel.core.parser.ParserOptions
+import com.pretzel.core.tools.serializer.JSONSerializer
+import java.util.Scanner
 
 
 class Main {
@@ -30,8 +37,38 @@ class Main {
 
         @JvmStatic
         fun runRepl(vararg args: String) {
-            val ts = TokenStream.open(Lexer("mod std:io:Input", Lexer.SourceMode.DIRECT))
-            ModStatementParser(ts).parse()
+            val scan = Scanner(System.`in`)
+            print(">>> ")
+            var source = scan.nextLine()
+
+            while (source.replace("\\s+".toRegex(), "").toLowerCase() != "//exit") {
+                val lx = Lexer(source, Lexer.SourceMode.DIRECT)
+                lx.getAllTokens()
+                val ts = TokenStream.open(lx)
+
+                if (ts.errors > 0) {
+                    print(">>> ")
+                    source = scan.nextLine().ensureEnd(";")
+                    continue
+                }
+
+                val p = ContextAgnosticParser(
+                    ts,
+                    ParserOptions(
+                        true,
+                        ParserOptions.LanguageLevel.PRETZEL_0_1,
+                        StreamReporter(source, System.err)
+                    )
+                )
+
+                val node = p.parse()
+                println(node)
+                if (node != null) {
+                    println(JSONSerializer().transform(node))
+                }
+                print(">>> ")
+                source = scan.nextLine()
+            }
         }
     }
 }
